@@ -22,6 +22,11 @@ cp .env.example .env
 - `CHATAPI_PASSWORD`
 - `CHATAPI_SESSION_SECRET`
 
+Optional:
+
+- `CHATAPI_NTFY_URL` to push each newly received user message to an ntfy topic
+- `CHATAPI_MESSAGES_PER_MINUTE_LIMIT` to limit how many user messages the backend accepts per minute; `0` disables the limit
+
 3. Run the backend:
 
 ```bash
@@ -35,6 +40,15 @@ python main.py
 cd frontend
 npm run dev
 ```
+
+If you want to serve the app under a subpath such as `/chatapi/`, set `VITE_APP_BASE_PATH` before building the frontend:
+
+```bash
+cd frontend
+VITE_APP_BASE_PATH=/chatapi/ npm run build
+```
+
+With that setting, frontend assets load from `/chatapi/` and frontend API requests go to `/chatapi/api/...` and `/chatapi/v1/...`.
 
 ## API
 
@@ -57,3 +71,7 @@ The `responses` endpoint accepts a compact OpenAI-style payload:
 ```
 
 If `conversation_id` is omitted, the backend normally creates a new conversation. The exception is a tool result request carrying `function_call_output.call_id`: it will be routed back to the conversation that produced that tool call.
+
+## ntfy notification
+
+If `.env` contains `CHATAPI_NTFY_URL`, the backend will `POST` the latest received user message text to that ntfy URL after the message is accepted and persisted.

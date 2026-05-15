@@ -3,17 +3,14 @@ from __future__ import annotations
 from flask import Flask
 from flask_cors import CORS
 
-from .assistant import AssistantService
-from .auth import AuthContext
-from .config import settings
-from .dependencies import AppDependencies
-from .pending import PendingTurnRegistry
+from .core import AppDependencies, AuthContext, settings
+from .repositories import ConversationStore
+from .services import AssistantService, MessageRateLimiter, PendingTurnRegistry
 from .routes import (
     register_auth_routes,
     register_conversation_routes,
     register_response_routes,
 )
-from .store import ConversationStore
 
 
 def create_app() -> Flask:
@@ -25,12 +22,16 @@ def create_app() -> Flask:
     assistant = AssistantService(settings)
     auth = AuthContext(settings)
     pending_turns = PendingTurnRegistry()
+    message_rate_limiter = MessageRateLimiter(
+        limit=settings.messages_per_minute_limit
+    )
     deps = AppDependencies(
         settings=settings,
         auth=auth,
         store=store,
         assistant=assistant,
         pending_turns=pending_turns,
+        message_rate_limiter=message_rate_limiter,
     )
     app.extensions["chat_store"] = store
     app.extensions["assistant_service"] = assistant

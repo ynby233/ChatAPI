@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from .config import Settings
+from ..core import Settings
 
 
 def _estimate_tokens(text: str) -> int:

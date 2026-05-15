@@ -6,11 +6,16 @@ from typing import Any
 
 from flask import Flask, jsonify, request
 
-from ..assistant import build_openai_error, build_openai_response
-from ..dependencies import AppDependencies
-from ..pending import PendingTurn
-from ..response_stream import client_disconnected, discard_pending_turn, stream_pending_turn
-from ..store import build_title
+from ..core import AppDependencies
+from ..repositories import build_title
+from ..services.assistant import build_openai_error, build_openai_response
+from ..services.ntfy import notify_new_message
+from ..services.pending import PendingTurn
+from ..services.response_stream import (
+    client_disconnected,
+    discard_pending_turn,
+    stream_pending_turn,
+)
 
 
 def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
@@ -19,6 +24,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     assistant = deps.assistant
     pending_turns = deps.pending_turns
     settings = deps.settings
+    message_rate_limiter = deps.message_rate_limiter
 
     def reconcile_waiting_conversations(owner: str) -> None:
         reconciler = app.extensions.get("chat_reconcile_waiting")
@@ -250,6 +256,12 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
 
         model = str(data.get("model") or settings.upstream_model or "local-fallback")
         owner = auth.owner_id()
+        if not message_rate_limiter.allow(owner):
+            return build_openai_error(
+                f"rate limit exceeded: max {settings.messages_per_minute_limit} messages per minute",
+                code="rate_limit_exceeded",
+                status=429,
+            )
 
         conversation, conversation_error = resolve_conversation_for_request(data, owner)
         if conversation_error is not None:
@@ -322,6 +334,12 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                         **request_debug_metadata,
                     },
                 )
+            notify_new_message(
+                settings,
+                conversation_title=updated_conversation.title or build_title(context_text),
+                message_text=context_text,
+                logger=app.logger,
+            )
             store.update_conversation(
                 conversation.id,
                 owner,

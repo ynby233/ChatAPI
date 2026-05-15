@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from flask import Flask, jsonify, request, session
 
-from ..auth import AuthContext
-from ..config import Settings
+from ..core import AuthContext, Settings
 
 
 def register_auth_routes(app: Flask, *, auth: AuthContext, settings: Settings) -> None:

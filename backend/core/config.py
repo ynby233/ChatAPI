@@ -67,6 +67,8 @@ class Settings:
     host: str
     port: int
     title: str
+    ntfy_url: str
+    messages_per_minute_limit: int
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -123,6 +125,14 @@ class Settings:
             host=_first_non_empty("CHATAPI_HOST", "BACKEND_HOST", default="0.0.0.0"),
             port=int(_first_non_empty("CHATAPI_PORT", "BACKEND_PORT", default="5000")),
             title=_first_non_empty("CHATAPI_TITLE", default="ChatAPI"),
+            ntfy_url=_first_non_empty("CHATAPI_NTFY_URL", "NTFY_URL", default=""),
+            messages_per_minute_limit=int(
+                _first_non_empty(
+                    "CHATAPI_MESSAGES_PER_MINUTE_LIMIT",
+                    "MESSAGES_PER_MINUTE_LIMIT",
+                    default="0",
+                )
+            ),
         )
 
 

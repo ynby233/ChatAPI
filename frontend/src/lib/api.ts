@@ -1,5 +1,15 @@
+function resolveRequestUrl(url: string): string {
+  if (/^(?:[a-z]+:)?\/\//i.test(url)) {
+    return url
+  }
+  const baseUrl = import.meta.env.BASE_URL || '/'
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+  const normalizedPath = url.replace(/^\/+/, '')
+  return `${normalizedBase}${normalizedPath}`
+}
+
 export async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetch(resolveRequestUrl(url), {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',

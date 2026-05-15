@@ -4,8 +4,8 @@ from typing import Any
 
 from flask import Flask, jsonify, request
 
-from ..dependencies import AppDependencies
-from ..store import build_title
+from ..core import AppDependencies
+from ..repositories import build_title
 
 
 def register_conversation_routes(app: Flask, *, deps: AppDependencies) -> None:

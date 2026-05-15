@@ -5,7 +5,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.app import create_app
-from backend.config import settings
+from backend.core import settings
 
 
 def main() -> None:
