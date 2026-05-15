@@ -41,6 +41,25 @@ cd frontend
 npm run dev
 ```
 
+## HTTPS for backend
+
+If an upstream requires an `https://` base URL, the backend can serve HTTPS directly.
+
+1. Put a certificate and key on disk.
+2. Set both `CHATAPI_TLS_CERT_FILE` and `CHATAPI_TLS_KEY_FILE` in `.env`.
+3. Start the backend normally with `python main.py`.
+
+Example:
+
+```bash
+CHATAPI_HOST=0.0.0.0
+CHATAPI_PORT=5443
+CHATAPI_TLS_CERT_FILE=./certs/server.crt
+CHATAPI_TLS_KEY_FILE=./certs/server.key
+```
+
+When both variables are set, Flask starts with TLS enabled and serves the backend over `https://`.
+
 If you want to serve the app under a subpath such as `/chatapi/`, set `VITE_APP_BASE_PATH` before building the frontend:
 
 ```bash

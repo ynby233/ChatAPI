@@ -53,3 +53,4 @@ Thumbs.db
 
 # Local scratch files
 oai_response.txt
+deploy_rsync.sh

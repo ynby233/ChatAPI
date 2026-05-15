@@ -66,6 +66,8 @@ class Settings:
     cors_origins: list[str]
     host: str
     port: int
+    tls_cert_file: Path | None
+    tls_key_file: Path | None
     title: str
     ntfy_url: str
     messages_per_minute_limit: int
@@ -100,6 +102,25 @@ class Settings:
                 if upstream_api_base
                 else ""
             )
+        tls_cert_raw = _first_non_empty(
+            "CHATAPI_TLS_CERT_FILE",
+            "TLS_CERT_FILE",
+            default="",
+        )
+        tls_key_raw = _first_non_empty(
+            "CHATAPI_TLS_KEY_FILE",
+            "TLS_KEY_FILE",
+            default="",
+        )
+
+        def _resolve_optional_path(raw: str) -> Path | None:
+            if not raw:
+                return None
+            path = Path(raw)
+            if not path.is_absolute():
+                path = (repo_root / path).resolve()
+            return path
+
         return cls(
             username=_first_non_empty("CHATAPI_USERNAME", "ADMIN_USERNAME", default="admin"),
             password=_first_non_empty("CHATAPI_PASSWORD", "ADMIN_PASSWORD", default="change-me"),
@@ -124,6 +145,8 @@ class Settings:
             cors_origins=_split_csv(cors_raw),
             host=_first_non_empty("CHATAPI_HOST", "BACKEND_HOST", default="0.0.0.0"),
             port=int(_first_non_empty("CHATAPI_PORT", "BACKEND_PORT", default="5000")),
+            tls_cert_file=_resolve_optional_path(tls_cert_raw),
+            tls_key_file=_resolve_optional_path(tls_key_raw),
             title=_first_non_empty("CHATAPI_TITLE", default="ChatAPI"),
             ntfy_url=_first_non_empty("CHATAPI_NTFY_URL", "NTFY_URL", default=""),
             messages_per_minute_limit=int(
