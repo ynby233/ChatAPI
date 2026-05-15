@@ -9,6 +9,13 @@ type RenderableContentPart =
   | { type: 'text'; text: string }
   | { type: 'image'; src: string; detail?: string }
 
+function normalizeDisplayText(value: string): string {
+  return value
+    .replace(/\r\n/g, '\n')
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+}
+
 export function formatTime(value: string) {
   if (!value) return ''
   return new Intl.DateTimeFormat('zh-CN', {
@@ -170,7 +177,7 @@ function tryParseStructuredContent(rawContent: string): unknown {
 
 function parseRenderableContent(rawContent: string): RenderableContentPart[] {
   const fallback = rawContent.trim()
-    ? [{ type: 'text', text: rawContent } satisfies RenderableContentPart]
+    ? [{ type: 'text', text: normalizeDisplayText(rawContent) } satisfies RenderableContentPart]
     : []
 
   const parsed = tryParseStructuredContent(rawContent)
@@ -204,11 +211,11 @@ function parseRenderableContent(rawContent: string): RenderableContentPart[] {
       typeof record.text === 'string' &&
       record.text.trim()
     ) {
-      parts.push({ type: 'text', text: record.text })
+      parts.push({ type: 'text', text: normalizeDisplayText(record.text) })
       continue
     }
     if (!itemType && typeof record.text === 'string' && record.text.trim()) {
-      parts.push({ type: 'text', text: record.text })
+      parts.push({ type: 'text', text: normalizeDisplayText(record.text) })
     }
   }
 

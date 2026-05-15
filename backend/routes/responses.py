@@ -32,6 +32,13 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
             status=400,
         )
 
+    def normalize_message_text(value: str) -> str:
+        return (
+            value.replace("\r\n", "\n")
+            .replace("\\r\\n", "\n")
+            .replace("\\n", "\n")
+        )
+
     def response_input_payload(data: dict[str, Any]) -> Any:
         if "input" in data:
             return data["input"]
@@ -476,9 +483,9 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                     "arguments": text,
                 }
             else:
-                assistant_text = text
+                assistant_text = normalize_message_text(text)
                 output_items = []
-                output_text = text
+                output_text = assistant_text
                 assistant_metadata = {
                     "provider": "human",
                     "model": str(data.get("model") or pending.model or settings.upstream_model),
@@ -532,7 +539,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
             return {"error": "request body must be a JSON object"}, 400
-        text = str(data.get("text", "")).strip()
+        text = normalize_message_text(str(data.get("text", "")).strip())
         if not text:
             return {"error": "text is required"}, 400
         conversation_id = str(data.get("conversation_id", "")).strip()
