@@ -456,14 +456,18 @@ export function useChatWorkspace(isMobile: boolean) {
   }
 
   async function handleDraft() {
-    if (!isWaitingForUser || composerMode !== 'assistant_message') return
+    if (!isWaitingForUser) return
+    if (composerMode === 'tool_call') {
+      await handleSend({ resetMode: true, successMessage: '已输出 Tool Call' })
+      return
+    }
     const chunk = composer.trim()
     if (!chunk) return
     try {
       const response = await requestJson<{
         draft_text?: string
         draft_length: number
-      }>('/api/chat/draft', {
+      }>('/api/chat/output/delta', {
         method: 'POST',
         body: JSON.stringify({
           text: chunk,
@@ -475,34 +479,43 @@ export function useChatWorkspace(isMobile: boolean) {
         typeof response.draft_text === 'string' ? response.draft_text : `${draftBuffer}${chunk}`,
       )
       setComposer('')
-      message.success('已暂存')
+      message.success('已输出片段')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '暂存失败')
+      message.error(error instanceof Error ? error.message : '输出片段失败')
     }
   }
 
-  async function handleSend() {
+  function buildToolCallPayload(): string {
+    if (!toolName.trim()) {
+      throw new Error('请先选择一个 tool')
+    }
+    const properties = selectedToolSchema?.parameters?.properties ?? {}
+    const required = new Set(selectedToolSchema?.parameters?.required ?? [])
+    const payloadEntries = Object.entries(properties).flatMap(([key, schema]) => {
+      const rawValue = toolFormValues[key]
+      if (rawValue == null || rawValue === '') {
+        if (required.has(key)) {
+          throw new Error(`请填写必填参数: ${key}`)
+        }
+        return []
+      }
+      return [[key, normalizeToolFieldValue(rawValue, schema)] as const]
+    })
+    return JSON.stringify(Object.fromEntries(payloadEntries))
+  }
+
+  async function handleSend(options?: {
+    resetMode?: boolean
+    successMessage?: string
+  }) {
     if (!isWaitingForUser) return
     let finalText = ''
 
     if (composerMode === 'assistant_message') {
       finalText = `${draftBuffer}${composer}`.trim()
     } else {
-      if (!toolName.trim()) return
       try {
-        const properties = selectedToolSchema?.parameters?.properties ?? {}
-        const required = new Set(selectedToolSchema?.parameters?.required ?? [])
-        const payloadEntries = Object.entries(properties).flatMap(([key, schema]) => {
-          const rawValue = toolFormValues[key]
-          if (rawValue == null || rawValue === '') {
-            if (required.has(key)) {
-              throw new Error(`请填写必填参数: ${key}`)
-            }
-            return []
-          }
-          return [[key, normalizeToolFieldValue(rawValue, schema)] as const]
-        })
-        finalText = JSON.stringify(Object.fromEntries(payloadEntries))
+        finalText = buildToolCallPayload()
       } catch (error) {
         message.error(error instanceof Error ? error.message : '工具参数格式错误')
         return
@@ -522,7 +535,7 @@ export function useChatWorkspace(isMobile: boolean) {
           composerMode === 'tool_call' ? toolCallId.trim() || undefined : undefined,
         conversation_id: selectedConversationId || undefined,
       }
-      const response = await requestJson<ResponsesPayload>('/api/chat/send', {
+      const response = await requestJson<ResponsesPayload>('/api/chat/output/complete', {
         method: 'POST',
         body: JSON.stringify(payload),
       })
@@ -532,7 +545,9 @@ export function useChatWorkspace(isMobile: boolean) {
         localStorage.setItem(STORAGE_KEY, nextConversationId)
       }
       setComposer('')
-      setComposerMode('assistant_message')
+      if (options?.resetMode !== false) {
+        setComposerMode('assistant_message')
+      }
       setToolName('')
       setToolCallId('')
       setToolFormValues({})
@@ -540,7 +555,7 @@ export function useChatWorkspace(isMobile: boolean) {
       if (nextConversationId) {
         await loadMessages(nextConversationId)
       }
-      message.success('已发送')
+      message.success(options?.successMessage || '已结束输出')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '发送失败')
     } finally {

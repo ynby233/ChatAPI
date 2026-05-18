@@ -9,6 +9,8 @@ from flask import Flask, jsonify, request
 from ..core import AppDependencies
 from ..repositories import build_title
 from ..services.response_payloads import (
+    build_anthropic_message_response,
+    build_chat_completion_response,
     build_openai_error,
     build_openai_response,
     estimate_usage,
@@ -18,6 +20,8 @@ from ..services.pending import PendingTurn
 from ..services.response_stream import (
     client_disconnected,
     discard_pending_turn,
+    stream_anthropic_turn,
+    stream_chat_completion_turn,
     stream_pending_turn,
 )
 
@@ -64,6 +68,13 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
             .replace("\\n", "\n")
         )
 
+    def build_protocol_response_id(request_format: str, fallback_request_id: str) -> str:
+        if request_format == "chat_completions":
+            return f"chatcmpl_{uuid.uuid4().hex}"
+        if request_format == "anthropic_messages":
+            return f"msg_{uuid.uuid4().hex[:24]}"
+        return fallback_request_id
+
     def response_input_payload(data: dict[str, Any]) -> Any:
         if "input" in data:
             return data["input"]
@@ -71,11 +82,33 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
             return data["messages"]
         return data
 
+    def chat_input_payload(data: dict[str, Any]) -> Any:
+        return data.get("messages", [])
+
+    def anthropic_input_payload(data: dict[str, Any]) -> Any:
+        payload: list[Any] = []
+        system_prompt = data.get("system")
+        if isinstance(system_prompt, str) and system_prompt.strip():
+            payload.append({"role": "system", "content": system_prompt})
+        elif isinstance(system_prompt, list) and system_prompt:
+            payload.append({"role": "system", "content": system_prompt})
+        messages = data.get("messages", [])
+        if isinstance(messages, list):
+            payload.extend(messages)
+        return payload
+
+    def request_input_payload(data: dict[str, Any], request_format: str) -> Any:
+        if request_format == "chat_completions":
+            return chat_input_payload(data)
+        if request_format == "anthropic_messages":
+            return anthropic_input_payload(data)
+        return response_input_payload(data)
+
     def canonical_json(value: Any) -> str:
         return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
-    def extract_context_text(data: dict[str, Any]) -> str:
-        input_payload = data.get("input")
+    def extract_context_text(data: dict[str, Any], request_format: str) -> str:
+        input_payload = request_input_payload(data, request_format)
         if isinstance(input_payload, str):
             return input_payload.strip()
         chunks: list[str] = []
@@ -95,8 +128,16 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                 if node.get("role") in {"user", "assistant", "system", "developer"}:
                     visit(node.get("content"))
                     return
+                if node.get("type") == "tool_result":
+                    visit(node.get("content"))
+                    return
                 if isinstance(node.get("text"), str):
                     chunks.append(str(node["text"]).strip())
+                    return
+                if node.get("type") == "tool_use" and isinstance(node.get("input"), dict):
+                    raw_input = canonical_json(node.get("input"))
+                    if raw_input:
+                        chunks.append(raw_input)
                     return
                 if isinstance(node.get("content"), (str, list, dict)):
                     visit(node.get("content"))
@@ -132,6 +173,9 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                     if text:
                         parts.append(text)
                     return
+                if item_type == "tool_result":
+                    visit(value.get("content"))
+                    return
                 if isinstance(value.get("text"), str):
                     text = str(value.get("text", "")).strip()
                     if text:
@@ -163,8 +207,9 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         *,
         conversation_id: str | None,
         owner: str,
+        request_format: str,
     ) -> list[dict[str, Any]]:
-        payload = response_input_payload(data)
+        payload = request_input_payload(data, request_format)
         items = payload if isinstance(payload, list) else [payload]
         extracted: list[dict[str, Any]] = []
         for item in items:
@@ -172,6 +217,54 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                 continue
             role = str(item.get("role", "")).strip()
             item_type = str(item.get("type", "")).strip()
+            if request_format == "anthropic_messages" and role == "user":
+                content_blocks = item.get("content")
+                if isinstance(content_blocks, list):
+                    text_parts = [
+                        block
+                        for block in content_blocks
+                        if isinstance(block, dict)
+                        and str(block.get("type", "")).strip() in {"text", "input_text"}
+                    ]
+                    content = extract_text_content(text_parts)
+                    if content:
+                        extracted.append(
+                            {
+                                "role": "user",
+                                "content": content,
+                                "metadata": {
+                                    "turn": "user",
+                                    "status": "pending",
+                                    "source": request_format,
+                                },
+                            }
+                        )
+                    for content_block in content_blocks:
+                        if not isinstance(content_block, dict):
+                            continue
+                        if str(content_block.get("type", "")).strip() != "tool_result":
+                            continue
+                        output = extract_text_content(content_block.get("content"))
+                        call_id = str(content_block.get("tool_use_id", "")).strip()
+                        if output:
+                            extracted.append(
+                                {
+                                    "role": "tool",
+                                    "content": output,
+                                    "metadata": {
+                                        "source": request_format,
+                                        "response_mode": "tool_result",
+                                        "tool_call_id": call_id,
+                                        "tool_name": resolve_tool_name_for_call(
+                                            conversation_id,
+                                            owner,
+                                            call_id,
+                                        ),
+                                        "output": output,
+                                    },
+                                }
+                            )
+                continue
             if role == "user":
                 content = extract_text_content(item.get("content"))
                 if content:
@@ -182,7 +275,29 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                             "metadata": {
                                 "turn": "user",
                                 "status": "pending",
-                                "source": "responses",
+                                "source": request_format,
+                            },
+                        }
+                    )
+                continue
+            if request_format == "chat_completions" and role == "tool":
+                output = extract_text_content(item.get("content"))
+                call_id = str(item.get("tool_call_id", "")).strip()
+                if output:
+                    extracted.append(
+                        {
+                            "role": "tool",
+                            "content": output,
+                            "metadata": {
+                                "source": request_format,
+                                "response_mode": "tool_result",
+                                "tool_call_id": call_id,
+                                "tool_name": resolve_tool_name_for_call(
+                                    conversation_id,
+                                    owner,
+                                    call_id,
+                                ),
+                                "output": output,
                             },
                         }
                     )
@@ -196,7 +311,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                             "role": "tool",
                             "content": output,
                             "metadata": {
-                                "source": "responses",
+                                "source": request_format,
                                 "response_mode": "tool_result",
                                 "tool_call_id": call_id,
                                 "tool_name": resolve_tool_name_for_call(
@@ -210,12 +325,32 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                     )
         return extracted
 
-    def extract_tool_result_call_ids(data: dict[str, Any]) -> list[str]:
-        payload = response_input_payload(data)
+    def extract_tool_result_call_ids(data: dict[str, Any], request_format: str) -> list[str]:
+        payload = request_input_payload(data, request_format)
         items = payload if isinstance(payload, list) else [payload]
         call_ids: list[str] = []
         for item in items:
             if not isinstance(item, dict):
+                continue
+            if request_format == "chat_completions":
+                if str(item.get("role", "")).strip() != "tool":
+                    continue
+                call_id = str(item.get("tool_call_id", "")).strip()
+                if call_id:
+                    call_ids.append(call_id)
+                continue
+            if request_format == "anthropic_messages":
+                content_blocks = item.get("content")
+                if not isinstance(content_blocks, list):
+                    continue
+                for content_block in content_blocks:
+                    if not isinstance(content_block, dict):
+                        continue
+                    if str(content_block.get("type", "")).strip() != "tool_result":
+                        continue
+                    call_id = str(content_block.get("tool_use_id", "")).strip()
+                    if call_id:
+                        call_ids.append(call_id)
                 continue
             if str(item.get("type", "")).strip() != "function_call_output":
                 continue
@@ -224,7 +359,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                 call_ids.append(call_id)
         return call_ids
 
-    def resolve_conversation_for_request(data: dict[str, Any], owner: str):
+    def resolve_conversation_for_request(data: dict[str, Any], owner: str, request_format: str):
         explicit_conversation_id = str(data.get("conversation_id", "")).strip()
         if explicit_conversation_id:
             conversation = store.get_conversation(explicit_conversation_id, owner)
@@ -232,7 +367,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                 return None, build_openai_error("conversation not found", code="not_found", status=404)
             return conversation, None
 
-        for call_id in extract_tool_result_call_ids(data):
+        for call_id in extract_tool_result_call_ids(data, request_format):
             conversation = store.find_conversation_by_tool_call_id(owner, call_id)
             if conversation is not None:
                 return conversation, None
@@ -241,6 +376,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
 
     def build_message_debug_metadata(
         *,
+        request_format: str,
         request_data: dict[str, Any],
         input_text: str,
         input_payload: Any,
@@ -249,13 +385,29 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         response_id: str | None = None,
     ) -> dict[str, Any]:
         tool_schemas = request_data.get("tools")
+        if request_format == "anthropic_messages" and isinstance(tool_schemas, list):
+            tool_schemas = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": item.get("name"),
+                        "description": item.get("description", ""),
+                        "parameters": item.get("input_schema", {}),
+                    },
+                }
+                if isinstance(item, dict)
+                else item
+                for item in tool_schemas
+            ]
         return {
-            "provider": "responses",
+            "provider": request_format,
             "model": resolved_model,
+            "request_format": request_format,
             "request_debug": {
                 "request_id": request_id,
                 "response_id": response_id or "",
                 "model": resolved_model,
+                "request_format": request_format,
                 "request_keys": sorted(request_data.keys()),
                 "input_text": input_text,
                 "input_payload": input_payload,
@@ -265,11 +417,11 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
             },
         }
 
-    def prepare_pending_turn(data: dict[str, Any]):
+    def prepare_pending_turn(data: dict[str, Any], request_format: str):
         if not isinstance(data, dict):
             return build_openai_error("request body must be a JSON object")
 
-        context_text = extract_context_text(data)
+        context_text = extract_context_text(data, request_format)
         if not context_text:
             return build_openai_error("input is required")
 
@@ -282,7 +434,11 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                 status=429,
             )
 
-        conversation, conversation_error = resolve_conversation_for_request(data, owner)
+        conversation, conversation_error = resolve_conversation_for_request(
+            data,
+            owner,
+            request_format,
+        )
         if conversation_error is not None:
             return conversation_error
         if conversation is None:
@@ -303,6 +459,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
             data,
             conversation_id=conversation.id,
             owner=owner,
+            request_format=request_format,
         )
         updated_conversation = store.update_conversation(
             conversation.id,
@@ -315,13 +472,15 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
             owner_id=owner,
             model=model,
             input_text=context_text,
+            request_format=request_format,
             **get_stream_heartbeat_settings(),
         )
         try:
             request_debug_metadata = build_message_debug_metadata(
+                request_format=request_format,
                 request_data=data,
                 input_text=context_text,
-                input_payload=response_input_payload(data),
+                input_payload=request_input_payload(data, request_format),
                 request_id=pending.request_id,
                 resolved_model=model,
             )
@@ -344,7 +503,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                     metadata={
                         "turn": "user",
                         "status": "pending",
-                        "source": "responses",
+                        "source": request_format,
                         **request_debug_metadata,
                     },
                 )
@@ -379,6 +538,41 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         if updated_conversation is None:
             raise ValueError("conversation not found")
         usage = estimate_usage(pending.input_text, pending.assistant_text)
+        message_metadata = {}
+        try:
+            messages = store.get_messages(pending.conversation_id, pending.owner_id)
+        except ValueError:
+            messages = []
+        for message in reversed(messages):
+            if message.response_id == pending.response_id and message.role == "assistant":
+                message_metadata = message.metadata
+                break
+        tool_name = str(message_metadata.get("tool_name", "")).strip()
+        tool_call_id = str(message_metadata.get("tool_call_id", "")).strip()
+        arguments = str(message_metadata.get("arguments", "")).strip()
+
+        if pending.request_format == "chat_completions":
+            return build_chat_completion_response(
+                response_id=pending.response_id,
+                model=pending.model,
+                assistant_text=pending.assistant_text,
+                usage=usage,
+                response_mode=pending.response_mode,
+                tool_name=tool_name,
+                tool_call_id=tool_call_id,
+                arguments=arguments,
+            )
+        if pending.request_format == "anthropic_messages":
+            return build_anthropic_message_response(
+                response_id=pending.response_id,
+                model=pending.model,
+                assistant_text=pending.assistant_text,
+                usage=usage,
+                response_mode=pending.response_mode,
+                tool_name=tool_name,
+                tool_call_id=tool_call_id,
+                arguments=arguments,
+            )
         payload = build_openai_response(
             response_id=pending.response_id,
             model=pending.model,
@@ -392,14 +586,30 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         payload["input_text"] = pending.input_text
         return payload
 
-    def handle_responses_request(data: dict[str, Any]):
-        prepared = prepare_pending_turn(data)
+    def handle_responses_request(data: dict[str, Any], request_format: str):
+        prepared = prepare_pending_turn(data, request_format)
         if isinstance(prepared, tuple):
             pending, _conversation = prepared
         else:
             return prepared
 
         if bool(data.get("stream")):
+            if request_format == "chat_completions":
+                return stream_chat_completion_turn(
+                    pending,
+                    pending_turns=pending_turns,
+                    store=store,
+                    build_abort_error=build_abort_error,
+                    client_socket=request.environ.get("werkzeug.socket"),
+                )
+            if request_format == "anthropic_messages":
+                return stream_anthropic_turn(
+                    pending,
+                    pending_turns=pending_turns,
+                    store=store,
+                    build_abort_error=build_abort_error,
+                    client_socket=request.environ.get("werkzeug.socket"),
+                )
             return stream_pending_turn(
                 pending,
                 pending_turns=pending_turns,
@@ -431,15 +641,33 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     @auth.require_auth
     def responses():
         data = request.get_json(silent=True) or {}
-        result = handle_responses_request(data)
+        result = handle_responses_request(data, "responses")
         if isinstance(result, tuple):
             body, status = result
             return jsonify(body), status
         return result
 
-    @app.post("/api/chat/send")
+    @app.post("/v1/chat/completions")
     @auth.require_auth
-    def chat_send():
+    def chat_completions():
+        data = request.get_json(silent=True) or {}
+        result = handle_responses_request(data, "chat_completions")
+        if isinstance(result, tuple):
+            body, status = result
+            return jsonify(body), status
+        return result
+
+    @app.post("/apps/anthropic/v1/messages")
+    @auth.require_auth
+    def anthropic_messages():
+        data = request.get_json(silent=True) or {}
+        result = handle_responses_request(data, "anthropic_messages")
+        if isinstance(result, tuple):
+            body, status = result
+            return jsonify(body), status
+        return result
+
+    def handle_chat_output_complete():
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
             return {"error": "request body must be a JSON object"}, 400
@@ -470,7 +698,10 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
             return {"error": "conversation not found"}, 404
 
         try:
-            response_id = pending.request_id
+            response_id = build_protocol_response_id(
+                pending.request_format,
+                pending.request_id,
+            )
             if mode == "tool_call":
                 assistant_text = f"{tool_name}({text})"
                 output_items = [
@@ -547,9 +778,17 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
             },
         }
 
-    @app.post("/api/chat/draft")
+    @app.post("/api/chat/output/complete")
     @auth.require_auth
-    def chat_draft():
+    def chat_output_complete():
+        return handle_chat_output_complete()
+
+    @app.post("/api/chat/send")
+    @auth.require_auth
+    def chat_send():
+        return handle_chat_output_complete()
+
+    def handle_chat_output_delta():
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
             return {"error": "request body must be a JSON object"}, 400
@@ -588,6 +827,16 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
             "draft_text": pending.draft_text,
             "draft_length": len(pending.draft_text),
         }
+
+    @app.post("/api/chat/output/delta")
+    @auth.require_auth
+    def chat_output_delta():
+        return handle_chat_output_delta()
+
+    @app.post("/api/chat/draft")
+    @auth.require_auth
+    def chat_draft():
+        return handle_chat_output_delta()
 
     @app.get("/api/config/stream-heartbeat")
     @auth.require_auth

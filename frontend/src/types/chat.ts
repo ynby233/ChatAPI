@@ -32,6 +32,7 @@ export type MessageItem = {
   metadata?: {
     provider?: string
     model?: string
+    request_format?: 'responses' | 'chat_completions' | 'anthropic_messages' | string
     response_mode?: 'assistant_message' | 'tool_call' | 'tool_result' | string
     tool_name?: string
     tool_call_id?: string
@@ -41,6 +42,7 @@ export type MessageItem = {
       request_id?: string
       response_id?: string
       model?: string
+      request_format?: 'responses' | 'chat_completions' | 'anthropic_messages' | string
       request_keys?: string[]
       input_text?: string
       input_payload?: unknown

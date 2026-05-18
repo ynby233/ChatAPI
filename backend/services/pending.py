@@ -13,6 +13,7 @@ class PendingTurn:
     owner_id: str
     model: str
     input_text: str
+    request_format: str = "responses"
     event: threading.Event = field(default_factory=threading.Event)
     stream_event: threading.Event = field(default_factory=threading.Event)
     assistant_text: str = ""
@@ -42,6 +43,7 @@ class PendingTurnRegistry:
         owner_id: str,
         model: str,
         input_text: str,
+        request_format: str = "responses",
         heartbeat_text: str = "",
         heartbeat_interval_seconds: float = 0.0,
     ) -> PendingTurn:
@@ -54,6 +56,7 @@ class PendingTurnRegistry:
                 owner_id=owner_id,
                 model=model,
                 input_text=input_text,
+                request_format=request_format,
                 heartbeat_text=heartbeat_text,
                 heartbeat_interval_seconds=max(0.0, float(heartbeat_interval_seconds or 0.0)),
             )

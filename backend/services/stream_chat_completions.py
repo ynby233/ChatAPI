@@ -1,0 +1,140 @@
+from __future__ import annotations
+
+import time
+import uuid
+from typing import Any, Callable
+
+from flask import stream_with_context
+
+from .pending import PendingTurn, PendingTurnRegistry
+from .response_payloads import estimate_usage
+from .stream_common import (
+    build_stream_response,
+    client_disconnected,
+    discard_pending_turn,
+    sse_data,
+)
+
+
+def stream_chat_completion_turn(
+    pending: PendingTurn,
+    *,
+    pending_turns: PendingTurnRegistry,
+    store: Any,
+    build_abort_error: Callable[[str], tuple[dict[str, Any], int]],
+    client_socket: Any,
+):
+    completion_id = pending.response_id or f"chatcmpl_{uuid.uuid4().hex}"
+    created_at = int(time.time())
+
+    def chunk(delta: dict[str, Any], *, finish_reason: str | None = None, usage: dict[str, Any] | None = None):
+        return {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created_at,
+            "model": pending.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": delta,
+                    "finish_reason": finish_reason,
+                }
+            ],
+            "usage": usage,
+        }
+
+    def generate():
+        sent_text = ""
+        sent_role = False
+        last_heartbeat_at = time.monotonic()
+        try:
+            while True:
+                if client_disconnected(client_socket):
+                    discard_pending_turn(pending, pending_turns=pending_turns, store=store)
+                    return
+
+                for piece in pending_turns.consume_draft_chunks(pending.request_id):
+                    delta: dict[str, Any] = {"content": piece}
+                    if not sent_role:
+                        delta["role"] = "assistant"
+                        sent_role = True
+                    sent_text += piece
+                    yield sse_data(chunk(delta))
+
+                heartbeat_interval = max(0.0, float(pending.heartbeat_interval_seconds or 0.0))
+                if heartbeat_interval > 0 and pending.heartbeat_text:
+                    now = time.monotonic()
+                    if now - last_heartbeat_at >= heartbeat_interval:
+                        delta = {"content": pending.heartbeat_text}
+                        if not sent_role:
+                            delta["role"] = "assistant"
+                            sent_role = True
+                        sent_text += pending.heartbeat_text
+                        yield sse_data(chunk(delta))
+                        last_heartbeat_at = now
+
+                if pending.event.is_set():
+                    finalized = pending_turns.wait(pending.request_id)
+                    if finalized.aborted:
+                        error_body, _ = build_abort_error(
+                            finalized.abort_message or "request aborted"
+                        )
+                        yield sse_data({"error": error_body["error"]})
+                        yield sse_data("[DONE]")
+                        return
+                    usage = estimate_usage(finalized.input_text, finalized.assistant_text)
+                    if finalized.response_mode == "tool_call":
+                        metadata = finalized.response_output_items[0] if finalized.response_output_items else {}
+                        delta = {
+                            "role": "assistant",
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": str(metadata.get("call_id", "")),
+                                    "type": "function",
+                                    "function": {
+                                        "name": str(metadata.get("name", "")),
+                                        "arguments": str(metadata.get("arguments", "")),
+                                    },
+                                }
+                            ],
+                        }
+                        yield sse_data(chunk(delta, finish_reason="tool_calls"))
+                    else:
+                        remaining = finalized.assistant_text
+                        if remaining.startswith(sent_text):
+                            remaining = remaining[len(sent_text):]
+                        if remaining or not sent_role:
+                            delta = {"content": remaining}
+                            if not sent_role:
+                                delta["role"] = "assistant"
+                            yield sse_data(chunk(delta))
+                        yield sse_data(chunk({}, finish_reason="stop"))
+                    yield sse_data(
+                        {
+                            "id": completion_id,
+                            "object": "chat.completion.chunk",
+                            "created": created_at,
+                            "model": pending.model,
+                            "choices": [],
+                            "usage": {
+                                "prompt_tokens": usage["input_tokens"],
+                                "completion_tokens": usage["output_tokens"],
+                                "total_tokens": usage["total_tokens"],
+                            },
+                        }
+                    )
+                    yield sse_data("[DONE]")
+                    return
+
+                wait_timeout = 0.5
+                if heartbeat_interval > 0 and pending.heartbeat_text:
+                    elapsed = time.monotonic() - last_heartbeat_at
+                    wait_timeout = max(0.05, min(0.5, heartbeat_interval - elapsed))
+                pending.stream_event.wait(wait_timeout)
+                pending.stream_event.clear()
+        except GeneratorExit:
+            discard_pending_turn(pending, pending_turns=pending_turns, store=store)
+            raise
+
+    return build_stream_response(stream_with_context(generate()))

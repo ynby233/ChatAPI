@@ -233,6 +233,10 @@ export function ChatPane(props: ChatPaneProps) {
             const isToolResult = item.metadata?.response_mode === 'tool_result'
             const requestDebug = item.metadata?.request_debug
             const debugSections = [
+              {
+                label: '请求格式',
+                value: requestDebug?.request_format || item.metadata?.request_format || '',
+              },
               { label: '模型', value: requestDebug?.model || item.metadata?.model || '' },
               { label: '请求 ID', value: requestDebug?.request_id || '' },
               { label: '响应 ID', value: requestDebug?.response_id || item.response_id || '' },
@@ -446,7 +450,7 @@ export function ChatPane(props: ChatPaneProps) {
                         />
                       ))
                     ) : (
-                      <div className="tool-form-empty">当前 tool 没有参数，直接点击结束输出即可。</div>
+                      <div className="tool-form-empty">当前 tool 没有参数，直接点击左侧按钮输出即可。</div>
                     )}
                   </div>
                 ) : (
@@ -475,33 +479,32 @@ export function ChatPane(props: ChatPaneProps) {
               {isWaitingForUser
                 ? composerMode === 'assistant_message'
                   ? '流式输出的片段会保留在本轮回复里，结束输出之后这一轮结束。'
-                  : 'Tool Call 模式会根据 schema 组装参数 JSON，结束输出后会返回一个 function_call item。'
+                  : 'Tool Call 模式会根据 schema 组装参数 JSON，点击左侧按钮会直接输出一个 function_call item。'
                 : '没有新的 user 请求时不能输出回复。'}
             </Typography.Text>
             <Space>
               <Button
+                type={composerMode === 'tool_call' ? 'primary' : 'default'}
                 icon={<SaveOutlined />}
                 onClick={() => void onDraft()}
                 disabled={
                   !isWaitingForUser ||
-                  !composer.trim() ||
                   sending ||
-                  composerMode !== 'assistant_message'
+                  (composerMode === 'assistant_message' ? !composer.trim() : !toolName.trim())
                 }
               >
-                流式输出
+                {composerMode === 'assistant_message' ? '流式输出' : '输出 Tool Call'}
               </Button>
               <Button
-                type="primary"
+                type={composerMode === 'assistant_message' ? 'primary' : 'default'}
                 icon={<SendOutlined />}
                 onClick={() => void onSend()}
                 loading={sending}
                 disabled={
                   sending ||
                   !isWaitingForUser ||
-                  (composerMode === 'assistant_message'
-                    ? !composer.trim() && !draftBuffer.trim()
-                    : !toolName.trim())
+                  composerMode !== 'assistant_message' ||
+                  (!composer.trim() && !draftBuffer.trim())
                 }
               >
                 结束输出
