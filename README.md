@@ -16,8 +16,43 @@
 - 可选 ntfy 消息推送
 
 ## 1. 部署
+### 无需 Nginx 一键部署
+#### 构建前端
 
-### 后动后端
+```bash
+cd ./frontend
+npm i
+npm run build
+```
+
+#### 设置.env
+```env
+CHATAPI_USERNAME=用户名
+CHATAPI_PASSWORD=密码
+CHATAPI_SESSION_SECRET=随机字符串
+
+CHATAPI_API_KEY=sk-你的调用API密钥
+
+CHATAPI_DB_PATH=./data/chatapi.sqlite3
+CHATAPI_DATA_DIR=./data
+
+CHATAPI_HOST=0.0.0.0
+CHATAPI_PORT=443
+CHATAPI_WEB_DIST_DIR=../frontend/dist
+CHATAPI_TLS_CERT_FILE=../certs/server.crt
+CHATAPI_TLS_KEY_FILE=../certs/server.key
+```
+
+#### 启动Flask
+
+```bash
+cd ./backend
+uv sync
+uv run main.py
+```
+### dev部署
+
+#### 后动后端
 
 ```bash
 cd ./backend
@@ -25,14 +60,13 @@ uv sync
 uv run main.py
 ```
 
-### 启动前端
+#### 启动前端
 
 ```bash
 cd ./frontend
 npm i
 npm run dev
 ```
-
 
 ## 3. 配置环境变量
 
@@ -65,6 +99,9 @@ CHATAPI_MESSAGES_PER_MINUTE_LIMIT=0
 可选配置：
 
 ```env
+# 直接让 Flask 对外托管前端静态文件（例如 Vite build 后的 dist）
+# CHATAPI_WEB_DIST_DIR=./frontend/dist
+
 # ntfy 推送地址
 # CHATAPI_NTFY_URL=https://ntfy.sh/your-topic
 
@@ -115,6 +152,18 @@ server {
 ```
 
 如果要启用 HTTPS，建议由 Nginx 处理证书，而不是直接使用 Flask 内置服务。
+
+如果不想额外部署 Nginx，也可以直接让 Flask 对外同时提供 API 和前端静态文件：
+
+```env
+CHATAPI_WEB_DIST_DIR=./frontend/dist
+```
+
+设置后：
+
+- `/api/*` 和 `/v1/*` 继续走后端接口
+- 其他路径会从该目录下直接返回静态文件
+- 当请求路径不存在且目录中包含 `index.html` 时，会自动回退到 `index.html`，可用于前端单页应用路由
 
 
 ## 5. 可用接口

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Flask
+from flask import Flask, abort, send_from_directory
 from flask_cors import CORS
 
 from .core import AppDependencies, AuthContext, settings
@@ -47,5 +47,40 @@ def create_app() -> Flask:
     register_realtime_routes(app, deps=deps)
     register_response_routes(app, deps=deps)
     register_statistics_routes(app, deps=deps)
+
+    if settings.web_dist_dir:
+        web_dist_dir = settings.web_dist_dir
+        index_file = web_dist_dir / "index.html"
+        if not web_dist_dir.exists():
+            raise FileNotFoundError(f"WEB_DIST_DIR not found: {web_dist_dir}")
+        if not web_dist_dir.is_dir():
+            raise NotADirectoryError(f"WEB_DIST_DIR is not a directory: {web_dist_dir}")
+
+        def _send_dist_file(request_path: str):
+            candidate = (web_dist_dir / request_path).resolve()
+            try:
+                candidate.relative_to(web_dist_dir.resolve())
+            except ValueError as exc:
+                raise FileNotFoundError(request_path) from exc
+            if candidate.is_file():
+                relative_path = candidate.relative_to(web_dist_dir).as_posix()
+                return send_from_directory(web_dist_dir, relative_path)
+            raise FileNotFoundError(request_path)
+
+        @app.get("/", defaults={"request_path": ""})
+        @app.get("/<path:request_path>")
+        def serve_web_dist(request_path: str):
+            if request_path.startswith("api/") or request_path.startswith("v1/"):
+                abort(404)
+            if not request_path:
+                if not index_file.exists():
+                    abort(404)
+                return send_from_directory(web_dist_dir, "index.html")
+            try:
+                return _send_dist_file(request_path)
+            except FileNotFoundError:
+                if index_file.exists():
+                    return send_from_directory(web_dist_dir, "index.html")
+                abort(404)
 
     return app

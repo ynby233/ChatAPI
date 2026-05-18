@@ -66,6 +66,7 @@ class Settings:
     port: int
     tls_cert_file: Path | None
     tls_key_file: Path | None
+    web_dist_dir: Path | None
     title: str
     ntfy_url: str
     messages_per_minute_limit: int
@@ -94,6 +95,11 @@ class Settings:
             "TLS_KEY_FILE",
             default="",
         )
+        web_dist_raw = _first_non_empty(
+            "CHATAPI_WEB_DIST_DIR",
+            "WEB_DIST_DIR",
+            default="",
+        )
 
         def _resolve_optional_path(raw: str) -> Path | None:
             if not raw:
@@ -119,6 +125,7 @@ class Settings:
             port=int(_first_non_empty("CHATAPI_PORT", "BACKEND_PORT", default="5000")),
             tls_cert_file=_resolve_optional_path(tls_cert_raw),
             tls_key_file=_resolve_optional_path(tls_key_raw),
+            web_dist_dir=_resolve_optional_path(web_dist_raw),
             title=_first_non_empty("CHATAPI_TITLE", default="ChatAPI"),
             ntfy_url=_first_non_empty("CHATAPI_NTFY_URL", "NTFY_URL", default=""),
             messages_per_minute_limit=int(
