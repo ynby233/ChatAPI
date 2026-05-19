@@ -27,7 +27,13 @@ export async function requestJson<T>(url: string, init?: RequestInit): Promise<T
   if (!response.ok) {
     const fallback =
       body?.error?.message ?? body?.error ?? body?.message ?? '请求失败'
-    throw new Error(typeof fallback === 'string' ? fallback : '请求失败')
+    const errorMessage = typeof fallback === 'string' ? fallback : '请求失败'
+    const error = new Error(errorMessage)
+    // Attach additional error details from the response body
+    if (body && typeof body === 'object') {
+      ;(error as any).responseBody = body
+    }
+    throw error
   }
   return body as T
 }

@@ -122,6 +122,7 @@ export function WorkspaceRoute() {
       onSelectConversation={workspace.handleSelectConversation}
       onToggleAutomationRule={workspace.handleToggleAutomationRule}
       onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+      onTotpRefresh={workspace.handleTotpRefresh}
       pruneKeepCount={workspace.pruneKeepCount}
       pruneModalOpen={workspace.pruneModalOpen}
       pruningConversations={workspace.pruningConversations}
@@ -134,6 +135,7 @@ export function WorkspaceRoute() {
       setEditingAutomationRule={workspace.setEditingAutomationRule}
       setPruneKeepCount={workspace.setPruneKeepCount}
       setPruneModalOpen={workspace.setPruneModalOpen}
+      totpEnabled={workspace.totpEnabled}
     />
   )
 
@@ -170,7 +172,6 @@ export function WorkspaceRoute() {
           </Header>
           <Content className="content-shell">
             <ChatPane
-              apiKey={workspace.apiKey}
               availableToolSchemas={workspace.availableToolSchemas}
               chatScrollRef={workspace.chatScrollRef}
               composer={workspace.composer}

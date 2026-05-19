@@ -23,6 +23,7 @@ function LoginRoute() {
   const navigate = useNavigate()
   const auth = useAuthSession()
   const [loading, setLoading] = useState(false)
+  const [totpRequired, setTotpRequired] = useState(false)
 
   async function handleSubmit(values: LoginFormValues) {
     setLoading(true)
@@ -30,7 +31,13 @@ function LoginRoute() {
       await auth.login(values)
       navigate('/app', { replace: true })
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '登录失败')
+      // Check if TOTP is required based on the error response
+      if (error instanceof Error && (error as any).responseBody?.totp_required) {
+        setTotpRequired(true)
+        message.error(error instanceof Error ? error.message : '请输入验证码')
+      } else {
+        message.error(error instanceof Error ? error.message : '登录失败')
+      }
     } finally {
       setLoading(false)
     }
@@ -47,7 +54,7 @@ function LoginRoute() {
   return (
     <LoginScreen
       loading={loading}
-      totpEnabled={auth.session.totp_enabled}
+      totpEnabled={auth.session.totp_enabled || totpRequired}
       onSubmit={(values) => void handleSubmit(values)}
     />
   )

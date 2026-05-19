@@ -34,7 +34,6 @@ import type {
 const { TextArea } = Input
 
 type ChatPaneProps = {
-  apiKey: string
   availableToolSchemas: ToolSchemaOption[]
   chatScrollRef: React.RefObject<HTMLDivElement | null>
   composer: string
@@ -66,7 +65,6 @@ type ChatPaneProps = {
 export function ChatPane(props: ChatPaneProps) {
   const { message: antMessage } = App.useApp()
   const {
-    apiKey,
     availableToolSchemas,
     chatScrollRef,
     composer,
@@ -315,7 +313,7 @@ export function ChatPane(props: ChatPaneProps) {
                                 icon={<CopyOutlined />}
                                 className="copy-curl-btn"
                                 onClick={() => {
-                                  const curl = buildCurlCommand(requestDebug.request_body, apiKey)
+                                  const curl = buildCurlCommand(requestDebug.request_body)
                                   if (!curl) return
                                   if (navigator.clipboard && window.isSecureContext) {
                                     navigator.clipboard.writeText(curl).then(() => {

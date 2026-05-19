@@ -1,11 +1,42 @@
 export type AuthUser = {
+  id: string
   username: string
+  role: 'admin' | 'user'
 }
 
 export type AuthSession = {
   authenticated: boolean
   user: AuthUser | null
   totp_enabled: boolean
+}
+
+export type User = {
+  id: string
+  username: string
+  role: 'admin' | 'user'
+  created_at: string
+  last_login_at?: string
+  api_key_count?: number
+}
+
+export type ApiKeyInfo = {
+  id: string
+  name: string
+  api_key: string
+  created_at: string
+}
+
+export type UserConfig = {
+  ntfy_url_enabled: boolean
+  ntfy_url: string
+  messages_per_minute_limit_enabled: boolean
+  messages_per_minute_limit: number
+}
+
+export type TotpSetup = {
+  secret: string
+  uri: string
+  qr_base64: string
 }
 
 export type Conversation = {
@@ -133,16 +164,8 @@ export type StatisticsSummary = {
 
 export type SystemConfig = {
   public_statistics: boolean
-  api_key_enabled: boolean
-  api_key: string
   title_enabled: boolean
   title: string
-  ntfy_url_enabled: boolean
-  ntfy_url: string
-  messages_per_minute_limit_enabled: boolean
-  messages_per_minute_limit: number
-  totp_secret_enabled: boolean
-  totp_secret: string
 }
 
 export type WorkspaceSnapshotEvent = {

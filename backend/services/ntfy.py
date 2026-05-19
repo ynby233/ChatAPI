@@ -4,23 +4,24 @@ from concurrent.futures import ThreadPoolExecutor
 from logging import Logger
 from urllib import request
 
-from ..repositories import ConversationStore
+from ..repositories import UserStore
 
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ntfy")
 
 
 def notify_new_message(
-    store: ConversationStore,
+    user_store: UserStore,
+    owner_id: str,
     *,
     conversation_title: str,
     message_text: str,
     logger: Logger,
 ) -> None:
-    url = store.get_effective_ntfy_url()
+    url = user_store.get_effective_ntfy_url(owner_id)
     text = message_text.strip()
     if not url or not text:
         return
-    title_fallback = store.get_effective_title("ChatAPI")
+    title_fallback = user_store.get_effective_title("ChatAPI")
 
     def send() -> None:
         body = text.encode("utf-8")

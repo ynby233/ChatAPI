@@ -61,6 +61,7 @@ type ConversationSidebarProps = {
   onSelectConversation: (conversationId: string) => void | Promise<void>
   onToggleAutomationRule: (ruleId: string, enabled: boolean) => void | Promise<void>
   onToggleCollapsed: () => void
+  onTotpRefresh: () => void
   pruneKeepCount: number
   pruneModalOpen: boolean
   pruningConversations: boolean
@@ -73,6 +74,7 @@ type ConversationSidebarProps = {
   setEditingAutomationRule: (value: AutomationRule | null) => void
   setPruneKeepCount: (value: number) => void
   setPruneModalOpen: (value: boolean) => void
+  totpEnabled: boolean
 }
 
 export function ConversationSidebar({
@@ -98,6 +100,7 @@ export function ConversationSidebar({
   onSelectConversation,
   onToggleAutomationRule,
   onToggleCollapsed,
+  onTotpRefresh,
   pruneKeepCount,
   pruneModalOpen,
   pruningConversations,
@@ -110,6 +113,7 @@ export function ConversationSidebar({
   setEditingAutomationRule,
   setPruneKeepCount,
   setPruneModalOpen,
+  totpEnabled,
 }: ConversationSidebarProps) {
   const [toolCallModalOpen, setToolCallModalOpen] = useState(false)
   const [toolCallSchemaConversationId, setToolCallSchemaConversationId] = useState('')
@@ -170,7 +174,7 @@ export function ConversationSidebar({
       if (selectedSchema) {
         const properties = selectedSchema.parameters?.properties ?? {}
         const required = new Set(selectedSchema.parameters?.required ?? [])
-        const entries = Object.entries(properties).flatMap(([key, _schema]) => {
+        const entries = Object.entries(properties).flatMap(([key]) => {
           const rawValue = toolCallFormValues[key]
           if (rawValue == null || rawValue === '') {
             if (required.has(key)) return []
@@ -436,6 +440,9 @@ export function ConversationSidebar({
         open={automationRulesModalOpen}
         onClose={() => setAutomationRulesModalOpen(false)}
         savingAutomationRules={savingAutomationRules}
+        user={auth.user}
+        totpEnabled={totpEnabled}
+        onTotpRefresh={onTotpRefresh}
       />
       <Modal
         title={editingAutomationRule ? `编辑规则 ${editingAutomationRule.id}` : '编辑规则'}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
-import { Button, Card, DatePicker, Typography } from 'antd'
+import { Button, DatePicker, Typography } from 'antd'
 
 import { requestJson } from '../../lib/api'
 import type { StatisticsSummary } from '../../types/chat'
@@ -56,7 +56,7 @@ export function StatisticsPanel({ open }: StatisticsPanelProps) {
   const [preset, setPreset] = useState<StatisticsPresetKey>('24h')
   const [range, setRange] = useState<[Dayjs | null, Dayjs | null]>(() => getPresetRange('24h'))
   const [summary, setSummary] = useState<StatisticsSummary | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -164,25 +164,25 @@ export function StatisticsPanel({ open }: StatisticsPanelProps) {
       </div>
 
       <div className="statistics-grid">
-        <Card className="statistics-card" loading={loading}>
+        <div className="statistics-card">
           <Typography.Text className="statistics-card-label">总请求数</Typography.Text>
           <Typography.Title level={2} className="statistics-card-value">
             {formatNumber(current.total_requests)}
           </Typography.Title>
-        </Card>
-        <Card className="statistics-card" loading={loading}>
+        </div>
+        <div className="statistics-card">
           <Typography.Text className="statistics-card-label">平均请求时间</Typography.Text>
           <Typography.Title level={2} className="statistics-card-value">
             {formatDuration(current.average_request_time_seconds)}
           </Typography.Title>
-        </Card>
-        <Card className="statistics-card" loading={loading}>
+        </div>
+        <div className="statistics-card">
           <Typography.Text className="statistics-card-label">平均 TPM</Typography.Text>
           <Typography.Title level={2} className="statistics-card-value">
             {formatNumber(current.average_tpm, 1)}
           </Typography.Title>
-        </Card>
-        <Card className="statistics-card statistics-card-tokens" loading={loading}>
+        </div>
+        <div className="statistics-card statistics-card-tokens">
           <Typography.Text className="statistics-card-label">总 token 数</Typography.Text>
           <Typography.Title level={2} className="statistics-card-value">
             {formatNumber(current.total_tokens)}
@@ -191,7 +191,7 @@ export function StatisticsPanel({ open }: StatisticsPanelProps) {
             <span>输入 {formatNumber(current.input_tokens)}</span>
             <span>输出 {formatNumber(current.output_tokens)}</span>
           </div>
-        </Card>
+        </div>
       </div>
 
       {error ? <div className="statistics-error">{error}</div> : null}

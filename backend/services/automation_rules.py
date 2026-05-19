@@ -11,7 +11,6 @@ from typing import Any
 from .output_controller import TurnOutputController
 from .pending import PendingTurn
 
-AUTOMATION_RULES_KEY = "automation_rules_json"
 LEGACY_HEARTBEAT_RULE_ID = "legacy-heartbeat"
 
 
@@ -208,12 +207,12 @@ def materialize_rule(payload: dict[str, Any]) -> AutomationRule:
 
 
 class AutomationRuleEngine:
-    def __init__(self, *, store: Any, output_controller: TurnOutputController):
-        self._store = store
+    def __init__(self, *, user_store: Any, output_controller: TurnOutputController):
+        self._user_store = user_store
         self._output_controller = output_controller
 
-    def load_rule_payloads(self) -> list[dict[str, Any]]:
-        raw = self._store.get_config(AUTOMATION_RULES_KEY, "[]")
+    def load_rule_payloads(self, owner_id: str) -> list[dict[str, Any]]:
+        raw = self._user_store.get_automation_rules(owner_id)
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
@@ -228,18 +227,18 @@ class AutomationRuleEngine:
             result.append(normalized)
         return result
 
-    def save_rule_payloads(self, rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def save_rule_payloads(self, owner_id: str, rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
         validated: list[dict[str, Any]] = []
         for item in rules:
             normalized, error = validate_rule_payload(item)
             if normalized is None:
                 raise ValueError(error or "invalid rule")
             validated.append(normalized)
-        self._store.set_config(AUTOMATION_RULES_KEY, json.dumps(validated, ensure_ascii=False))
+        self._user_store.set_automation_rules(owner_id, json.dumps(validated, ensure_ascii=False))
         return validated
 
-    def get_heartbeat_rule_settings(self) -> dict[str, Any]:
-        for rule in self.load_rule_payloads():
+    def get_heartbeat_rule_settings(self, owner_id: str) -> dict[str, Any]:
+        for rule in self.load_rule_payloads(owner_id):
             if str(rule.get("id")) != LEGACY_HEARTBEAT_RULE_ID:
                 continue
             text = str(rule["action"]["text"])
@@ -253,8 +252,8 @@ class AutomationRuleEngine:
             "heartbeat_interval_seconds": 0.0,
         }
 
-    def update_heartbeat_rule_settings(self, *, heartbeat_text: str, interval_seconds: float) -> dict[str, Any]:
-        rules = [rule for rule in self.load_rule_payloads() if str(rule.get("id")) != LEGACY_HEARTBEAT_RULE_ID]
+    def update_heartbeat_rule_settings(self, owner_id: str, *, heartbeat_text: str, interval_seconds: float) -> dict[str, Any]:
+        rules = [rule for rule in self.load_rule_payloads(owner_id) if str(rule.get("id")) != LEGACY_HEARTBEAT_RULE_ID]
         if heartbeat_text and interval_seconds > 0:
             rules.append(
                 {
@@ -272,7 +271,7 @@ class AutomationRuleEngine:
                     },
                 }
             )
-        self.save_rule_payloads(rules)
+        self.save_rule_payloads(owner_id, rules)
         return {
             "heartbeat_text": heartbeat_text,
             "heartbeat_interval_seconds": float(interval_seconds),
@@ -280,9 +279,10 @@ class AutomationRuleEngine:
 
     def start_for_pending(self, pending: PendingTurn) -> None:
         input_text = pending.input_text
+        owner_id = pending.owner_id
         rules = [
             materialize_rule(payload)
-            for payload in self.load_rule_payloads()
+            for payload in self.load_rule_payloads(owner_id)
             if bool(payload.get("enabled", True))
         ]
         for rule in rules:

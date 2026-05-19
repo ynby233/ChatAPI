@@ -9,4 +9,6 @@ dependencies = [
     "flask-cors>=6.0.2",
     "flask-sock>=0.7.0",
     "python-dotenv>=1.2.2",
+    "qrcode>=7.4",
+    "pillow>=10.0",
 ]

@@ -90,7 +90,7 @@ class TurnCoordinator:
             publish_sync=publish_sync,
         )
         self._automation_rules = AutomationRuleEngine(
-            store=deps.store,
+            user_store=deps.user_store,
             output_controller=self._output_controller,
         )
 
@@ -107,6 +107,10 @@ class TurnCoordinator:
         return self._deps.store
 
     @property
+    def user_store(self):
+        return self._deps.user_store
+
+    @property
     def settings(self):
         return self._deps.settings
 
@@ -114,25 +118,27 @@ class TurnCoordinator:
     def message_rate_limiter(self):
         return self._deps.message_rate_limiter
 
-    def get_stream_heartbeat_settings(self) -> dict[str, Any]:
-        return self._automation_rules.get_heartbeat_rule_settings()
+    def get_stream_heartbeat_settings(self, owner_id: str) -> dict[str, Any]:
+        return self._automation_rules.get_heartbeat_rule_settings(owner_id)
 
     def update_stream_heartbeat_settings(
         self,
+        owner_id: str,
         *,
         heartbeat_text: str,
         heartbeat_interval_seconds: float,
     ) -> dict[str, Any]:
         return self._automation_rules.update_heartbeat_rule_settings(
+            owner_id,
             heartbeat_text=heartbeat_text,
             interval_seconds=heartbeat_interval_seconds,
         )
 
-    def get_automation_rules(self) -> list[dict[str, Any]]:
-        return self._automation_rules.load_rule_payloads()
+    def get_automation_rules(self, owner_id: str) -> list[dict[str, Any]]:
+        return self._automation_rules.load_rule_payloads(owner_id)
 
-    def update_automation_rules(self, rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return self._automation_rules.save_rule_payloads(rules)
+    def update_automation_rules(self, owner_id: str, rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return self._automation_rules.save_rule_payloads(owner_id, rules)
 
     def build_abort_error(self, message_text: str) -> tuple[dict[str, Any], int]:
         return build_openai_error(
@@ -155,7 +161,8 @@ class TurnCoordinator:
 
         model = str(normalized_data.get("model") or "mock-gpt-4.1-mini")
         owner = self.auth.owner_id()
-        self.message_rate_limiter.limit = self.store.get_effective_messages_per_minute_limit(0)
+        rate_limit = self.user_store.get_effective_messages_per_minute_limit(owner, 0)
+        self.message_rate_limiter.limit = rate_limit
         if not self.message_rate_limiter.allow(owner):
             return build_openai_error(
                 f"rate limit exceeded: max {self.message_rate_limiter.limit} messages per minute",
@@ -253,7 +260,8 @@ class TurnCoordinator:
                     },
                 )
             notify_new_message(
-                self.store,
+                self.user_store,
+                owner,
                 conversation_title=updated_conversation.title or build_title(context_text),
                 message_text=context_text,
                 logger=self._logger,

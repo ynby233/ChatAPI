@@ -94,7 +94,7 @@ export function useChatWorkspace(isMobile: boolean) {
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([])
   const [editingAutomationRule, setEditingAutomationRule] = useState<AutomationRule | null>(null)
   const [savingAutomationRules, setSavingAutomationRules] = useState(false)
-  const [apiKey, setApiKey] = useState('')
+  const [totpEnabled, setTotpEnabled] = useState(false)
   const chatScrollRef = useRef<HTMLDivElement | null>(null)
   const conversationsRef = useRef<Conversation[]>([])
   const selectedConversationIdRef = useRef('')
@@ -173,11 +173,9 @@ export function useChatWorkspace(isMobile: boolean) {
         const session = await requestJson<AuthSession>('/api/auth/session')
         if (!active) return
         setAuth(session)
+        setTotpEnabled(session.totp_enabled)
         if (session.authenticated) {
           await loadAutomationRules()
-          requestJson<{ ok: boolean; api_key: string }>('/api/config/app-info')
-            .then((info) => { if (active && info.ok) setApiKey(info.api_key) })
-            .catch(() => {})
         }
       } catch (error) {
         if (active) {
@@ -376,6 +374,7 @@ export function useChatWorkspace(isMobile: boolean) {
       await requestJson('/api/auth/logout', { method: 'POST' })
     } finally {
       setAuth({ authenticated: false, user: null, totp_enabled: false })
+      setTotpEnabled(false)
       setConversations([])
       setSelectedConversationId('')
       setMessagesByConversation({})
@@ -392,6 +391,15 @@ export function useChatWorkspace(isMobile: boolean) {
       setEditingAutomationRule(null)
       localStorage.removeItem(STORAGE_KEY)
       message.info('已退出登录')
+    }
+  }
+
+  async function handleTotpRefresh() {
+    try {
+      const session = await requestJson<AuthSession>('/api/auth/session')
+      setTotpEnabled(session.totp_enabled)
+    } catch {
+      // ignore
     }
   }
 
@@ -779,7 +787,6 @@ export function useChatWorkspace(isMobile: boolean) {
     abortPopoverConversationId,
     abortReason,
     abortingConversationId,
-    apiKey,
     auth,
     availableToolSchemas,
     booting,
@@ -799,6 +806,7 @@ export function useChatWorkspace(isMobile: boolean) {
     handlePruneConversations,
     handleSelectConversation,
     handleSend,
+    handleTotpRefresh,
     isWaitingForUser,
     keyboardOffset,
     loginLoading,
@@ -829,6 +837,7 @@ export function useChatWorkspace(isMobile: boolean) {
     setToolName,
     editingAutomationRule,
     savingAutomationRules,
+    totpEnabled,
     toolCallId,
     toolFormValues,
     toolName,

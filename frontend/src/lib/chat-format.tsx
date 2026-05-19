@@ -301,7 +301,7 @@ export function renderMessageContent(rawContent: string) {
   })
 }
 
-export function buildCurlCommand(requestBody: unknown, apiKey: string): string {
+export function buildCurlCommand(requestBody: unknown): string {
   if (requestBody == null) return ''
   const origin = window.location.origin
   const format = (requestBody as Record<string, unknown>)?.model != null
@@ -318,5 +318,5 @@ export function buildCurlCommand(requestBody: unknown, apiKey: string): string {
   else if (format === 'anthropic') endpoint = '/messages'
 
   const body = JSON.stringify(requestBody, null, 2)
-  return `curl '${origin}${endpoint}' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer ${apiKey}' \\\n  -d '${body}'`
+  return `curl '${origin}${endpoint}' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer YOUR_API_KEY' \\\n  -d '${body}'`
 }

@@ -12,12 +12,11 @@ from ..services.response_stream import (
 )
 from ..services.turn_coordinator import PreparedTurn, TurnCoordinator
 
-SYSTEM_PUBLIC_STATISTICS_CONFIG_KEY = "system.public_statistics"
-
 
 def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     auth = deps.auth
     store = deps.store
+    user_store = deps.user_store
     realtime = app.extensions.get("chat_realtime")
 
     def publish_sync(owner_id: str, conversation_id: str | None = None) -> None:
@@ -122,7 +121,8 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     @app.get("/api/config/stream-heartbeat")
     @auth.require_auth
     def get_stream_heartbeat_config():
-        return {"ok": True, **coordinator.get_stream_heartbeat_settings()}
+        owner_id = auth.owner_id()
+        return {"ok": True, **coordinator.get_stream_heartbeat_settings(owner_id)}
 
     @app.post("/api/config/stream-heartbeat")
     @auth.require_auth
@@ -131,6 +131,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         if not isinstance(data, dict):
             return {"error": "request body must be a JSON object"}, 400
 
+        owner_id = auth.owner_id()
         heartbeat_text = str(data.get("heartbeat_text", ""))
         raw_interval = data.get("heartbeat_interval_seconds", 0)
         try:
@@ -143,6 +144,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         return {
             "ok": True,
             **coordinator.update_stream_heartbeat_settings(
+                owner_id,
                 heartbeat_text=heartbeat_text,
                 heartbeat_interval_seconds=interval_seconds,
             ),
@@ -151,7 +153,8 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     @app.get("/api/config/automation-rules")
     @auth.require_auth
     def get_automation_rules():
-        return {"ok": True, "rules": coordinator.get_automation_rules()}
+        owner_id = auth.owner_id()
+        return {"ok": True, "rules": coordinator.get_automation_rules(owner_id)}
 
     @app.post("/api/config/automation-rules")
     @auth.require_auth
@@ -162,38 +165,38 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         rules = data.get("rules", [])
         if not isinstance(rules, list):
             return {"error": "rules must be an array"}, 400
+        owner_id = auth.owner_id()
         try:
-            normalized = coordinator.update_automation_rules(rules)
+            normalized = coordinator.update_automation_rules(owner_id, rules)
         except ValueError as error:
             return {"error": str(error)}, 400
         return {"ok": True, "rules": normalized}
 
     @app.get("/api/config/system")
     @auth.require_auth
+    @auth.require_admin
     def get_system_config():
         return {
             "ok": True,
-            **store.get_system_config_snapshot(),
+            **user_store.get_system_config_snapshot(),
         }
 
     @app.post("/api/config/system")
     @auth.require_auth
+    @auth.require_admin
     def update_system_config():
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
             return {"error": "request body must be a JSON object"}, 400
 
         try:
-            store.update_system_config_snapshot(data)
+            user_store.update_system_config_snapshot(data)
         except ValueError as error:
             return {"error": str(error)}, 400
 
-        if "messages_per_minute_limit_enabled" in data or "messages_per_minute_limit" in data:
-            deps.message_rate_limiter.limit = store.get_effective_messages_per_minute_limit(0)
-
         return {
             "ok": True,
-            **store.get_system_config_snapshot(),
+            **user_store.get_system_config_snapshot(),
         }
 
     @app.get("/api/config/app-info")
@@ -201,5 +204,4 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     def get_app_info():
         return {
             "ok": True,
-            "api_key": store.get_effective_api_key(),
         }

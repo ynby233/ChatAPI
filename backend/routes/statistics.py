@@ -4,20 +4,19 @@ from flask import Flask, request
 
 from ..core import AppDependencies
 
-PUBLIC_STATISTICS_CONFIG_KEY = "system.public_statistics"
-
 
 def register_statistics_routes(app: Flask, *, deps: AppDependencies) -> None:
     auth = deps.auth
     store = deps.store
+    user_store = deps.user_store
 
     @app.get("/api/statistics/summary")
     def get_statistics_summary():
-        public_statistics = store.get_config(PUBLIC_STATISTICS_CONFIG_KEY, "0") == "1"
-        if not public_statistics and auth.current_user() is None and not auth.is_request_authorized_by_api_key():
+        public_statistics = user_store.get_system_config("public_statistics", "0") == "1"
+        if not public_statistics and auth.current_user() is None and auth.resolve_owner_from_api_key() is None:
             return {"error": "unauthorized"}, 401
 
-        owner = "workspace:default"
+        owner = auth.owner_id()
         start_at = request.args.get("start") or None
         end_at = request.args.get("end") or None
         summary = store.get_statistics_summary(owner, start_at=start_at, end_at=end_at)

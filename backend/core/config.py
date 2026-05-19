@@ -55,8 +55,8 @@ def _split_csv(raw: str) -> list[str]:
 
 @dataclass(frozen=True)
 class Settings:
-    username: str
-    password: str
+    admin_username: str
+    admin_password: str
     session_secret: str
     data_dir: Path
     db_path: Path
@@ -108,8 +108,8 @@ class Settings:
             return path
 
         return cls(
-            username=_first_non_empty("CHATAPI_USERNAME", "ADMIN_USERNAME", default="admin"),
-            password=_first_non_empty("CHATAPI_PASSWORD", "ADMIN_PASSWORD", default="change-me"),
+            admin_username=_first_non_empty("CHATAPI_ADMIN_USERNAME", "CHATAPI_USERNAME", "ADMIN_USERNAME", default="admin"),
+            admin_password=_first_non_empty("CHATAPI_ADMIN_PASSWORD", "CHATAPI_PASSWORD", "ADMIN_PASSWORD", default="change-me"),
             session_secret=_first_non_empty(
                 "CHATAPI_SESSION_SECRET",
                 "ADMIN_SESSION_SECRET",

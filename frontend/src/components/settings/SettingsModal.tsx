@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Modal, Tabs } from 'antd'
 
-import type { AutomationRule } from '../../types/chat'
+import type { AutomationRule, AuthUser } from '../../types/chat'
+import { ApiKeyManagementPanel } from './ApiKeyManagementPanel'
 import { AutomationRulesPanel } from './AutomationRulesPanel'
 import { StatisticsPanel } from './StatisticsPanel'
 import { SystemSettingsPanel } from './SystemSettingsPanel'
+import { UserManagementPanel } from './UserManagementPanel'
+import { UserSettingsPanel } from './UserSettingsPanel'
 
 type SettingsModalProps = {
   automationRuleEditorOpen: boolean
@@ -16,7 +19,12 @@ type SettingsModalProps = {
   open: boolean
   onClose: () => void
   savingAutomationRules: boolean
+  user: AuthUser | null
+  totpEnabled: boolean
+  onTotpRefresh: () => void
 }
+
+type TabKey = 'statistics' | 'user-settings' | 'api-keys' | 'automation' | 'system' | 'users'
 
 export function SettingsModal({
   automationRuleEditorOpen,
@@ -28,14 +36,75 @@ export function SettingsModal({
   open,
   onClose,
   savingAutomationRules,
+  user,
+  totpEnabled,
+  onTotpRefresh,
 }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'statistics' | 'system' | 'automation'>('statistics')
+  const isAdmin = user?.role === 'admin'
+  const [activeTab, setActiveTab] = useState<TabKey>('statistics')
 
-  useEffect(() => {
-    if (open) {
-      setActiveTab('statistics')
-    }
-  }, [open])
+  const handleTabChange = (key: string) => {
+    setActiveTab(key as TabKey)
+  }
+
+  const commonTabs = [
+    {
+      key: 'statistics',
+      label: '统计面板',
+      children: <StatisticsPanel open={open && activeTab === 'statistics'} />,
+    },
+    {
+      key: 'automation',
+      label: '自动化规则',
+      children: (
+        <AutomationRulesPanel
+          automationRules={automationRules}
+          onCreateAutomationRule={onCreateAutomationRule}
+          onDeleteAutomationRule={onDeleteAutomationRule}
+          onEditAutomationRule={onEditAutomationRule}
+          onToggleAutomationRule={onToggleAutomationRule}
+          savingAutomationRules={savingAutomationRules}
+        />
+      ),
+    },
+    {
+      key: 'api-keys',
+      label: 'API Keys',
+      children: <ApiKeyManagementPanel open={open && activeTab === 'api-keys'} />,
+    },
+    {
+      key: 'user-settings',
+      label: '我的设置',
+      children: (
+        <UserSettingsPanel
+          open={open && activeTab === 'user-settings'}
+          onClose={onClose}
+          totpEnabled={totpEnabled}
+          onTotpRefresh={onTotpRefresh}
+        />
+      ),
+    },
+  ]
+
+  const adminTabs = [
+    {
+      key: 'system',
+      label: <span style={{ color: '#13c2c2' }}>系统设置</span>,
+      children: (
+        <SystemSettingsPanel
+          open={open && activeTab === 'system'}
+          onClose={onClose}
+        />
+      ),
+    },
+    {
+      key: 'users',
+      label: <span style={{ color: '#13c2c2' }}>用户管理</span>,
+      children: <UserManagementPanel open={open && activeTab === 'users'} />,
+    },
+  ]
+
+  const tabs = isAdmin ? [...commonTabs, ...adminTabs] : commonTabs
 
   return (
     <Modal
@@ -52,33 +121,8 @@ export function SettingsModal({
     >
       <Tabs
         activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as 'statistics' | 'system' | 'automation')}
-        items={[
-          {
-            key: 'statistics',
-            label: '统计面板',
-            children: <StatisticsPanel open={open && activeTab === 'statistics'} />,
-          },
-          {
-            key: 'system',
-            label: '系统设置',
-            children: <SystemSettingsPanel open={open && activeTab === 'system'} onClose={onClose} />,
-          },
-          {
-            key: 'automation',
-            label: '自动化规则',
-            children: (
-              <AutomationRulesPanel
-                automationRules={automationRules}
-                onCreateAutomationRule={onCreateAutomationRule}
-                onDeleteAutomationRule={onDeleteAutomationRule}
-                onEditAutomationRule={onEditAutomationRule}
-                onToggleAutomationRule={onToggleAutomationRule}
-                savingAutomationRules={savingAutomationRules}
-              />
-            ),
-          },
-        ]}
+        onChange={handleTabChange}
+        items={tabs}
       />
     </Modal>
   )

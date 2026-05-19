@@ -11,24 +11,18 @@ from typing import Any, Callable
 
 from flask import jsonify, request, session
 
+
 class AuthContext:
-    def __init__(self, store: Any | None = None):
+    def __init__(self, store: Any | None = None, user_store: Any | None = None):
         self.store = store
-
-    def api_key(self) -> str:
-        if self.store is None:
-            return ""
-        return self.store.get_effective_api_key()
-
-    def totp_secret(self) -> str:
-        if self.store is None:
-            return ""
-        return self.store.get_effective_totp_secret()
+        self.user_store = user_store
 
     def current_user(self) -> dict[str, str] | None:
+        user_id = str(session.get("user_id", "") or "").strip()
         username = str(session.get("username", "") or "").strip()
-        if username:
-            return {"username": username}
+        role = str(session.get("role", "") or "").strip()
+        if user_id and username:
+            return {"id": user_id, "username": username, "role": role}
         return None
 
     def request_api_key(self) -> str:
@@ -38,22 +32,39 @@ class AuthContext:
             or ""
         ).strip()
 
-    def is_request_authorized_by_api_key(self) -> bool:
-        current_api_key = self.api_key()
-        return bool(current_api_key) and self.request_api_key() == current_api_key
+    def resolve_owner_from_api_key(self) -> str | None:
+        api_key = self.request_api_key()
+        if not api_key or self.user_store is None:
+            return None
+        return self.user_store.resolve_api_key_owner(api_key)
 
     def owner_id(self) -> str:
-        if self.current_user() or self.is_request_authorized_by_api_key():
-            return "workspace:default"
+        user = self.current_user()
+        if user:
+            return user["id"]
+        owner = self.resolve_owner_from_api_key()
+        if owner:
+            return owner
         return "anonymous"
+
+    def is_admin(self) -> bool:
+        user = self.current_user()
+        return user is not None and user.get("role") == "admin"
 
     def require_auth(self, view: Callable[..., Any]):
         @wraps(view)
         def wrapped(*args, **kwargs):
-            if self.current_user() is None and not self.is_request_authorized_by_api_key():
+            if self.current_user() is None and self.resolve_owner_from_api_key() is None:
                 return jsonify({"error": "unauthorized"}), 401
             return view(*args, **kwargs)
+        return wrapped
 
+    def require_admin(self, view: Callable[..., Any]):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            if not self.is_admin():
+                return jsonify({"error": "forbidden"}), 403
+            return view(*args, **kwargs)
         return wrapped
 
     def request_headers_snapshot(self) -> dict[str, str]:
@@ -81,6 +92,18 @@ def _totp_code(secret: bytes, counter: int, digits: int = 6) -> str:
     offset = digest[-1] & 0x0F
     binary = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
     return str(binary % (10**digits)).zfill(digits)
+
+
+def generate_totp_secret() -> str:
+    raw = base64.b32encode(hashlib.sha256(time.time_ns().to_bytes(16, "big")).digest()[:20]).decode()
+    return raw.rstrip("=")
+
+
+def build_totp_uri(secret: str, username: str, issuer: str = "ChatAPI") -> str:
+    import urllib.parse
+    label = urllib.parse.quote(f"{issuer}:{username}")
+    issuer_encoded = urllib.parse.quote(issuer)
+    return f"otpauth://totp/{label}?secret={secret}&issuer={issuer_encoded}&algorithm=SHA1&digits=6&period=30"
 
 
 def verify_totp_code(

@@ -5,7 +5,7 @@ import queue
 import threading
 from typing import Any
 
-from ..repositories import ConversationStore
+from ..repositories import ConversationStore, UserStore
 
 
 @dataclass
@@ -15,8 +15,9 @@ class RealtimeSubscription:
 
 
 class RealtimeBroker:
-    def __init__(self, store: ConversationStore):
+    def __init__(self, store: ConversationStore, user_store: UserStore):
         self._store = store
+        self._user_store = user_store
         self._lock = threading.Lock()
         self._subscriptions_by_owner: dict[str, list[RealtimeSubscription]] = {}
 
