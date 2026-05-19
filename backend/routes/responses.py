@@ -80,12 +80,14 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
                 return jsonify(body), status
             pending.event.wait(0.5)
 
+    @app.post("/responses")
     @app.post("/v1/responses")
     @auth.require_auth
     def responses():
         data = request.get_json(silent=True) or {}
         return handle_protocol_request(data, "responses")
 
+    @app.post("/chat/completions")
     @app.post("/v1/chat/completions")
     @auth.require_auth
     def chat_completions():
@@ -93,6 +95,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         return handle_protocol_request(data, "chat_completions")
 
     @app.post("/messages")
+    @app.post("/v1/messages")
     @auth.require_auth
     def anthropic_messages():
         data = request.get_json(silent=True) or {}
