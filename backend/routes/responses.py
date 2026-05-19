@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import Flask, jsonify, request
 
 from ..core import AppDependencies
+from ..services.email import get_available_email_providers, resolve_email_provider
 from ..services.response_stream import (
     client_disconnected,
     discard_pending_turn,
@@ -176,9 +177,16 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     @auth.require_session_auth
     @auth.require_admin
     def get_system_config():
+        available_email_providers = get_available_email_providers()
+        snapshot = system_config_store.get_system_config_snapshot()
+        snapshot["email_provider"] = resolve_email_provider(
+            str(snapshot.get("email_provider", "")),
+            available_email_providers,
+        )
         return {
             "ok": True,
-            **system_config_store.get_system_config_snapshot(),
+            **snapshot,
+            "email_provider_options": available_email_providers,
         }
 
     @app.post("/api/config/system")
@@ -189,6 +197,10 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         if not isinstance(data, dict):
             return {"error": "request body must be a JSON object"}, 400
 
+        available_email_providers = get_available_email_providers()
+        data = dict(data)
+        data["email_provider"] = resolve_email_provider(str(data.get("email_provider", "")), available_email_providers)
+
         try:
             system_config_store.update_system_config_snapshot(data)
         except ValueError as error:
@@ -197,6 +209,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         return {
             "ok": True,
             **system_config_store.get_system_config_snapshot(),
+            "email_provider_options": available_email_providers,
         }
 
     @app.get("/api/config/app-info")

@@ -15,7 +15,7 @@ from flask import Flask, current_app, jsonify, request, session
 from ..core import AuthContext, Settings
 from ..core.auth import build_totp_uri, generate_totp_secret, verify_totp_code
 from ..repositories import SystemConfigStore, UserStore
-from ..services.email import send_verification_email
+from ..services.email import get_available_email_providers, resolve_email_provider, send_verification_email
 
 
 # In-memory verification code store: { email: (code, expiry_timestamp) }
@@ -95,7 +95,11 @@ def register_auth_routes(
         code = f"{secrets.randbelow(1000000):06d}"
         _verification_codes[email] = (code, time.time() + _CODE_TTL)
 
-        ok, message = send_verification_email(email, code, logger=_get_logger())
+        provider = resolve_email_provider(
+            system_config_store.get_system_config("value.email_provider", ""),
+            get_available_email_providers(),
+        )
+        ok, message = send_verification_email(email, code, provider=provider, logger=_get_logger())
         if not ok:
             return jsonify({"error": message}), 400
 

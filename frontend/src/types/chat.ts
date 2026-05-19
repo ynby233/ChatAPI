@@ -169,6 +169,11 @@ export type SystemConfig = {
   title: string
   external_registration_enabled: boolean
   email_verification_enabled: boolean
+  email_provider: string
+  email_provider_options: Array<{
+    value: string
+    label: string
+  }>
   registration_email_domain_restriction_enabled: boolean
   registration_email_domains: string
 }

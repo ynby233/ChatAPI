@@ -107,6 +107,7 @@ class SystemConfigStore:
                 "flag.email_verification",
                 False,
             ),
+            "email_provider": self.get_system_config("value.email_provider", ""),
             "registration_email_domain_restriction_enabled": self.get_system_config_flag(
                 "flag.registration_email_domain_restriction",
                 False,
@@ -141,6 +142,7 @@ class SystemConfigStore:
             "flag.email_verification",
             "1" if bool(data.get("email_verification_enabled")) else "0",
         )
+        self.set_system_config("value.email_provider", str(data.get("email_provider", "")))
         self.set_system_config(
             "flag.registration_email_domain_restriction",
             "1" if registration_email_domain_restriction_enabled else "0",

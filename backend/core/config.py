@@ -71,8 +71,11 @@ class Settings:
     smtp_port: int
     smtp_username: str
     smtp_password: str
-    smtp_from: str
+    email_from: str
     smtp_use_tls: bool
+    resend_api_key: str
+    brevo_api_key: str
+    brevo_from_name: str
     geetest_captcha_id: str
     geetest_captcha_key: str
     geetest_api_server: str
@@ -137,8 +140,11 @@ class Settings:
             smtp_port=int(_first_non_empty("CHATAPI_SMTP_PORT", "SMTP_PORT", default="587")),
             smtp_username=_first_non_empty("CHATAPI_SMTP_USERNAME", "SMTP_USERNAME", default=""),
             smtp_password=_first_non_empty("CHATAPI_SMTP_PASSWORD", "SMTP_PASSWORD", default=""),
-            smtp_from=_first_non_empty("CHATAPI_SMTP_FROM", "SMTP_FROM", default=""),
+            email_from=_first_non_empty("CHATAPI_EMAIL_FROM", default=""),
             smtp_use_tls=_first_non_empty("CHATAPI_SMTP_USE_TLS", "SMTP_USE_TLS", default="1") == "1",
+            resend_api_key=_first_non_empty("CHATAPI_RESEND_API_KEY", "RESEND_API_KEY", default=""),
+            brevo_api_key=_first_non_empty("CHATAPI_BREVO_API_KEY", "BREVO_API_KEY", default=""),
+            brevo_from_name=_first_non_empty("CHATAPI_BREVO_FROM_NAME", "BREVO_FROM_NAME", default="ChatAPI"),
             geetest_captcha_id=_first_non_empty("CHATAPI_GEETEST_CAPTCHA_ID", "GEETEST_CAPTCHA_ID", default=""),
             geetest_captcha_key=_first_non_empty("CHATAPI_GEETEST_CAPTCHA_KEY", "GEETEST_CAPTCHA_KEY", default=""),
             geetest_api_server=_first_non_empty("CHATAPI_GEETEST_API_SERVER", "GEETEST_API_SERVER", default="http://gcaptcha4.geetest.com"),

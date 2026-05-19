@@ -4,7 +4,7 @@ from flask import Flask, current_app, jsonify, request
 
 from ..core import AuthContext
 from ..repositories import ConversationStore, UserStore
-from ..services.email import send_test_email
+from ..services.email import resolve_email_provider, get_available_email_providers, send_test_email
 
 
 def register_admin_routes(
@@ -87,7 +87,15 @@ def register_admin_routes(
         if not email or "@" not in email:
             return jsonify({"error": "请输入有效的邮箱地址"}), 400
 
-        ok, message = send_test_email(email, logger=current_app.logger)
+        system_config_store = current_app.extensions.get("chat_system_config_store")
+        provider = ""
+        if system_config_store is not None:
+            provider = resolve_email_provider(
+                system_config_store.get_system_config("value.email_provider", ""),
+                get_available_email_providers(),
+            )
+
+        ok, message = send_test_email(email, provider=provider, logger=current_app.logger)
         if ok:
             return {"ok": True, "message": message}
         return jsonify({"error": message}), 400

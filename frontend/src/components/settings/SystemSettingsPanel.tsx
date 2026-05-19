@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Input, Switch, Typography } from 'antd'
+import { Button, Input, Select, Switch, Typography } from 'antd'
 
 import { appMessage } from '../../lib/antdApp'
 import { requestJson } from '../../lib/api'
@@ -16,8 +16,43 @@ const DEFAULT_CONFIG: SystemConfig = {
   title: '',
   external_registration_enabled: false,
   email_verification_enabled: false,
+  email_provider: '',
+  email_provider_options: [],
   registration_email_domain_restriction_enabled: false,
   registration_email_domains: '',
+}
+
+function normalizeSystemConfig(data: Partial<SystemConfig> & { ok?: boolean }): SystemConfig {
+  const nextConfig: SystemConfig = {
+    public_statistics: Boolean(data.public_statistics),
+    title_enabled: Boolean(data.title_enabled),
+    title: String(data.title ?? ''),
+    external_registration_enabled: Boolean(data.external_registration_enabled),
+    email_verification_enabled: Boolean(data.email_verification_enabled),
+    email_provider: String(data.email_provider ?? ''),
+    email_provider_options: Array.isArray(data.email_provider_options)
+      ? data.email_provider_options
+          .filter((option): option is { value: string; label: string } => Boolean(option?.value))
+          .map((option) => ({
+            value: String(option.value),
+            label: String(option.label ?? option.value),
+          }))
+      : [],
+    registration_email_domain_restriction_enabled: Boolean(data.registration_email_domain_restriction_enabled),
+    registration_email_domains: String(data.registration_email_domains ?? ''),
+  }
+
+  if (nextConfig.email_verification_enabled && !nextConfig.email_provider && nextConfig.email_provider_options.length > 0) {
+    nextConfig.email_provider = nextConfig.email_provider_options[0].value
+  }
+  if (
+    nextConfig.email_provider &&
+    !nextConfig.email_provider_options.some((option) => option.value === nextConfig.email_provider)
+  ) {
+    nextConfig.email_provider = nextConfig.email_provider_options[0]?.value ?? ''
+  }
+
+  return nextConfig
 }
 
 export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps) {
@@ -37,15 +72,7 @@ export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps)
       try {
         const data = await requestJson<{ ok: boolean } & SystemConfig>('/api/config/system')
         if (!active) return
-        const nextConfig: SystemConfig = {
-          public_statistics: Boolean(data.public_statistics),
-          title_enabled: Boolean(data.title_enabled),
-          title: String(data.title ?? ''),
-          external_registration_enabled: Boolean(data.external_registration_enabled),
-          email_verification_enabled: Boolean(data.email_verification_enabled),
-          registration_email_domain_restriction_enabled: Boolean(data.registration_email_domain_restriction_enabled),
-          registration_email_domains: String(data.registration_email_domains ?? ''),
-        }
+        const nextConfig = normalizeSystemConfig(data)
         setConfig(nextConfig)
         setSavedConfig(nextConfig)
         setRegistrationEmailDomainsError('')
@@ -60,14 +87,19 @@ export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps)
     return () => { active = false }
   }, [open])
 
-  const dirtyState = useMemo(() => ({
-    public_statistics: config.public_statistics !== savedConfig.public_statistics,
-    title: config.title_enabled !== savedConfig.title_enabled || config.title !== savedConfig.title,
-    registration: config.external_registration_enabled !== savedConfig.external_registration_enabled
-      || config.email_verification_enabled !== savedConfig.email_verification_enabled
-      || config.registration_email_domain_restriction_enabled !== savedConfig.registration_email_domain_restriction_enabled
-      || config.registration_email_domains !== savedConfig.registration_email_domains,
-  }), [config, savedConfig])
+  const dirtyState = useMemo(
+    () => ({
+      public_statistics: config.public_statistics !== savedConfig.public_statistics,
+      title: config.title_enabled !== savedConfig.title_enabled || config.title !== savedConfig.title,
+      registration:
+        config.external_registration_enabled !== savedConfig.external_registration_enabled
+        || config.email_verification_enabled !== savedConfig.email_verification_enabled
+        || config.email_provider !== savedConfig.email_provider
+        || config.registration_email_domain_restriction_enabled !== savedConfig.registration_email_domain_restriction_enabled
+        || config.registration_email_domains !== savedConfig.registration_email_domains,
+    }),
+    [config, savedConfig],
+  )
 
   const hasUnsavedChanges = Object.values(dirtyState).some(Boolean)
 
@@ -77,6 +109,13 @@ export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps)
     }
     if (key === 'registration_email_domain_restriction_enabled' && !value) {
       setRegistrationEmailDomainsError('')
+    }
+    if (key === 'email_verification_enabled' && value && !config.email_provider) {
+      const fallbackProvider = config.email_provider_options[0]?.value ?? ''
+      if (fallbackProvider) {
+        setConfig((current) => ({ ...current, [key]: value, email_provider: fallbackProvider }))
+        return
+      }
     }
     setConfig((current) => ({ ...current, [key]: value }))
   }
@@ -92,15 +131,7 @@ export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps)
         method: 'POST',
         body: JSON.stringify(config),
       })
-      const nextConfig: SystemConfig = {
-        public_statistics: Boolean(data.public_statistics),
-        title_enabled: Boolean(data.title_enabled),
-        title: String(data.title ?? ''),
-        external_registration_enabled: Boolean(data.external_registration_enabled),
-        email_verification_enabled: Boolean(data.email_verification_enabled),
-        registration_email_domain_restriction_enabled: Boolean(data.registration_email_domain_restriction_enabled),
-        registration_email_domains: String(data.registration_email_domains ?? ''),
-      }
+      const nextConfig = normalizeSystemConfig(data)
       setConfig(nextConfig)
       setSavedConfig(nextConfig)
       setRegistrationEmailDomainsError('')
@@ -189,7 +220,7 @@ export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps)
           <Typography.Text className="system-settings-row-title">测试邮件</Typography.Text>
           <div className="system-settings-row-body">
             <Typography.Text className="system-settings-row-help">
-              填写邮箱地址并点击发送，用于验证 .env 中的 SMTP 配置是否正确。
+              填写邮箱地址并点击发送，用于验证当前配置的邮箱发送方式是否正确。
             </Typography.Text>
             <div className="system-settings-row-field system-settings-row-field-visible">
               <Input
@@ -267,9 +298,32 @@ export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps)
         <div className="system-settings-row">
           <Typography.Text className="system-settings-row-title">邮箱验证</Typography.Text>
           <div className="system-settings-row-body">
-            <Typography.Text className="system-settings-row-help">
-              开启后，注册时需要输入邮箱收到的验证码。需先配置 SMTP。
+            <Typography.Text
+              className={`system-settings-row-help ${
+                config.email_verification_enabled ? 'system-settings-row-help-hidden' : 'system-settings-row-help-visible'
+              }`}
+            >
+              开启后，注册时需要输入邮箱收到的验证码。请选择可用的邮箱提供商。
             </Typography.Text>
+            <div
+              className={`system-settings-row-field ${
+                config.email_verification_enabled ? 'system-settings-row-field-visible' : 'system-settings-row-field-hidden'
+              }`}
+            >
+              {config.email_provider_options.length > 0 ? (
+                <Select
+                  value={config.email_provider || undefined}
+                  placeholder="选择邮箱提供商"
+                  options={config.email_provider_options}
+                  style={{ width: '100%' }}
+                  onChange={(value) => updateSection('email_provider', value)}
+                />
+              ) : (
+                <Typography.Text type="secondary">
+                  当前未检测到可用的邮箱提供商，请先配置 SMTP 或 Resend API Key。
+                </Typography.Text>
+              )}
+            </div>
           </div>
           <Switch
             checked={config.email_verification_enabled}

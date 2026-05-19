@@ -1222,7 +1222,8 @@
 
 .system-settings-row-field .ant-input,
 .system-settings-row-field .ant-input-number,
-.system-settings-row-field .ant-space-compact {
+.system-settings-row-field .ant-space-compact,
+.system-settings-row-field .ant-select {
   width: 100%;
 }
 
