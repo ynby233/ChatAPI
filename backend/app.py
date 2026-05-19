@@ -18,16 +18,16 @@ from .routes import (
 
 
 def create_app() -> Flask:
+    store = ConversationStore(settings.db_path)
+    session_secret = store.get_or_create_session_secret(settings.session_secret)
+
     app = Flask(__name__)
-    app.config.update(SECRET_KEY=settings.session_secret)
+    app.config.update(SECRET_KEY=session_secret)
     CORS(app, supports_credentials=True, origins=settings.cors_origins)
 
-    store = ConversationStore(settings.db_path)
-    auth = AuthContext(settings)
+    auth = AuthContext(store)
     pending_turns = PendingTurnRegistry()
-    message_rate_limiter = MessageRateLimiter(
-        limit=settings.messages_per_minute_limit
-    )
+    message_rate_limiter = MessageRateLimiter(limit=store.get_effective_messages_per_minute_limit(0))
     image_store = ImageAssetStore(settings.uploads_img_dir)
     realtime = RealtimeBroker(store)
     deps = AppDependencies(
@@ -46,7 +46,7 @@ def create_app() -> Flask:
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "title": settings.title}
+        return {"ok": True, "title": store.get_effective_title("ChatAPI")}
 
     register_auth_routes(app, auth=auth, settings=settings)
     register_conversation_routes(app, deps=deps)

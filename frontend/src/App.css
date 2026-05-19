@@ -1106,35 +1106,121 @@
 
 .system-settings-card .ant-card-body {
   display: grid;
-  gap: 18px;
-  padding: 20px;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.system-settings-rows {
+  display: grid;
+  gap: 10px;
 }
 
 .system-settings-row {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  min-height: 42px;
+}
+
+.system-settings-row + .system-settings-row {
+  border-top: 1px solid color-mix(in srgb, var(--app-border) 62%, transparent);
+}
+
+.system-settings-row-title {
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.system-settings-row-body {
+  position: relative;
+  min-width: 0;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.system-settings-row-help,
+.system-settings-row-field {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    max-height 180ms ease;
+  overflow: hidden;
+}
+
+.system-settings-row-help {
+  color: var(--app-text-muted);
+  max-height: 28px;
+  transform: translateY(0);
+}
+
+.system-settings-row-help-visible {
+  opacity: 1;
+}
+
+.system-settings-row-help-hidden {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+}
+
+.system-settings-row-field {
+  max-height: 40px;
+  transform: translateY(3px);
+}
+
+.system-settings-row-field-visible {
+  opacity: 1;
+}
+
+.system-settings-row-field-hidden {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+}
+
+.system-settings-row-field .ant-input,
+.system-settings-row-field .ant-input-number,
+.system-settings-row-field .ant-space-compact {
+  width: 100%;
+}
+
+.system-settings-compact {
+  width: 100%;
+}
+
+.system-settings-number-input {
+  width: 100%;
+}
+
+.system-settings-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding-top: 6px;
 }
 
-.system-settings-copy {
-  display: grid;
-  gap: 4px;
+.system-settings-footer-hint {
+  color: var(--app-text-muted);
 }
 
-.system-settings-title {
-  margin: 0 !important;
-}
-
-.system-settings-desc {
-  margin: 0 !important;
-  color: var(--app-text-muted) !important;
-}
-
-.system-settings-actions {
+.system-settings-footer-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
 }
+
 
 .automation-editor-section {
   display: grid;

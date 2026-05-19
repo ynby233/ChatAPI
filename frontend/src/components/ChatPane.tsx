@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type UIEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 
 import {
   App,
@@ -36,12 +36,10 @@ const { TextArea } = Input
 type ChatPaneProps = {
   apiKey: string
   availableToolSchemas: ToolSchemaOption[]
-  bottomRef: React.RefObject<HTMLDivElement | null>
   chatScrollRef: React.RefObject<HTMLDivElement | null>
   composer: string
   composerMode: ComposerMode
   draftBuffer: string
-  handleChatScroll: (event: UIEvent<HTMLDivElement>) => void
   handleComposerKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   isMobile: boolean
   isWaitingForUser: boolean
@@ -70,12 +68,10 @@ export function ChatPane(props: ChatPaneProps) {
   const {
     apiKey,
     availableToolSchemas,
-    bottomRef,
     chatScrollRef,
     composer,
     composerMode,
     draftBuffer,
-    handleChatScroll,
     handleComposerKeyDown,
     isMobile,
     isWaitingForUser,
@@ -195,7 +191,7 @@ export function ChatPane(props: ChatPaneProps) {
         </Space>
       </div>
 
-      <div ref={chatScrollRef} className="chat-scroll" onScroll={handleChatScroll}>
+      <div ref={chatScrollRef} className="chat-scroll">
         {messagesLoading && visibleMessages.length === 0 ? (
           <div className="empty-stage">
             <Spin size="large" />
@@ -380,7 +376,6 @@ export function ChatPane(props: ChatPaneProps) {
             </div>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       <Card ref={composerCardRef} className="composer-card" style={composerStyle}>

@@ -96,9 +96,6 @@ export function useChatWorkspace(isMobile: boolean) {
   const [savingAutomationRules, setSavingAutomationRules] = useState(false)
   const [apiKey, setApiKey] = useState('')
   const chatScrollRef = useRef<HTMLDivElement | null>(null)
-  const bottomRef = useRef<HTMLDivElement | null>(null)
-  const shouldStickToBottomRef = useRef(true)
-  const previousConversationIdRef = useRef('')
   const conversationsRef = useRef<Conversation[]>([])
   const selectedConversationIdRef = useRef('')
   const socketRef = useRef<WebSocket | null>(null)
@@ -220,27 +217,6 @@ export function useChatWorkspace(isMobile: boolean) {
       return changed ? next : prev
     })
   }, [conversations])
-
-  useEffect(() => {
-    const conversationChanged =
-      previousConversationIdRef.current !== selectedConversationId
-
-    if (conversationChanged) {
-      previousConversationIdRef.current = selectedConversationId
-      shouldStickToBottomRef.current = true
-    }
-
-    if (!shouldStickToBottomRef.current) return
-
-    const frame = window.requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({
-        behavior: conversationChanged ? 'auto' : 'smooth',
-        block: 'end',
-      })
-    })
-
-    return () => window.cancelAnimationFrame(frame)
-  }, [selectedConversationId, messages, draftBuffer, sending])
 
   useEffect(() => {
     if (composerMode !== 'tool_call') return
@@ -799,13 +775,6 @@ export function useChatWorkspace(isMobile: boolean) {
     void handleDraft()
   }
 
-  function handleChatScroll(event: React.UIEvent<HTMLDivElement>) {
-    const container = event.currentTarget
-    const distanceToBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight
-    shouldStickToBottomRef.current = distanceToBottom <= 80
-  }
-
   return {
     abortPopoverConversationId,
     abortReason,
@@ -814,7 +783,6 @@ export function useChatWorkspace(isMobile: boolean) {
     auth,
     availableToolSchemas,
     booting,
-    bottomRef,
     chatScrollRef,
     composer,
     composerMode,
@@ -823,7 +791,6 @@ export function useChatWorkspace(isMobile: boolean) {
     draftBuffer,
     drawerOpen,
     handleAbortConversation,
-    handleChatScroll,
     handleComposerKeyDown,
     handleDeleteConversation,
     handleDraft,

@@ -15,7 +15,8 @@ def register_auth_routes(app: Flask, *, auth: AuthContext, settings: Settings) -
         totp = str(data.get("totp", "")).strip()
         if username != settings.username or password != settings.password:
             return jsonify({"error": "账号或密码不正确"}), 401
-        if settings.totp_secret and not verify_totp_code(settings.totp_secret, totp):
+        current_totp_secret = auth.totp_secret().strip()
+        if current_totp_secret and not verify_totp_code(current_totp_secret, totp):
             return jsonify({"error": "验证码不正确"}), 401
         session["username"] = username
         return {"ok": True, "user": {"username": username}}
@@ -31,5 +32,5 @@ def register_auth_routes(app: Flask, *, auth: AuthContext, settings: Settings) -
         return {
             "authenticated": bool(user),
             "user": user,
-            "totp_enabled": bool(settings.totp_secret.strip()),
+            "totp_enabled": bool(auth.totp_secret().strip()),
         }

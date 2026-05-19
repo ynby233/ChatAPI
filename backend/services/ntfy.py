@@ -4,22 +4,23 @@ from concurrent.futures import ThreadPoolExecutor
 from logging import Logger
 from urllib import request
 
-from ..core import Settings
+from ..repositories import ConversationStore
 
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ntfy")
 
 
 def notify_new_message(
-    settings: Settings,
+    store: ConversationStore,
     *,
     conversation_title: str,
     message_text: str,
     logger: Logger,
 ) -> None:
-    url = settings.ntfy_url.strip()
+    url = store.get_effective_ntfy_url()
     text = message_text.strip()
     if not url or not text:
         return
+    title_fallback = store.get_effective_title("ChatAPI")
 
     def send() -> None:
         body = text.encode("utf-8")
@@ -29,7 +30,7 @@ def notify_new_message(
             method="POST",
             headers={
                 "Content-Type": "text/plain; charset=utf-8",
-                "Title": conversation_title[:80] or settings.title,
+                "Title": conversation_title[:80] or title_fallback,
             },
         )
         try:

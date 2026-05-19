@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Flask, jsonify, request
 
-from ..core import AppDependencies, settings
+from ..core import AppDependencies
 from ..services.response_stream import (
     client_disconnected,
     discard_pending_turn,
@@ -173,7 +173,7 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     def get_system_config():
         return {
             "ok": True,
-            "public_statistics": store.get_config(SYSTEM_PUBLIC_STATISTICS_CONFIG_KEY, "0") == "1",
+            **store.get_system_config_snapshot(),
         }
 
     @app.post("/api/config/system")
@@ -183,14 +183,17 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         if not isinstance(data, dict):
             return {"error": "request body must be a JSON object"}, 400
 
-        public_statistics = bool(data.get("public_statistics"))
-        store.set_config(
-            SYSTEM_PUBLIC_STATISTICS_CONFIG_KEY,
-            "1" if public_statistics else "0",
-        )
+        try:
+            store.update_system_config_snapshot(data)
+        except ValueError as error:
+            return {"error": str(error)}, 400
+
+        if "messages_per_minute_limit_enabled" in data or "messages_per_minute_limit" in data:
+            deps.message_rate_limiter.limit = store.get_effective_messages_per_minute_limit(0)
+
         return {
             "ok": True,
-            "public_statistics": public_statistics,
+            **store.get_system_config_snapshot(),
         }
 
     @app.get("/api/config/app-info")
@@ -198,5 +201,5 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     def get_app_info():
         return {
             "ok": True,
-            "api_key": settings.api_key,
+            "api_key": store.get_effective_api_key(),
         }

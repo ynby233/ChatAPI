@@ -133,6 +133,16 @@ export type StatisticsSummary = {
 
 export type SystemConfig = {
   public_statistics: boolean
+  api_key_enabled: boolean
+  api_key: string
+  title_enabled: boolean
+  title: string
+  ntfy_url_enabled: boolean
+  ntfy_url: string
+  messages_per_minute_limit_enabled: boolean
+  messages_per_minute_limit: number
+  totp_secret_enabled: boolean
+  totp_secret: string
 }
 
 export type WorkspaceSnapshotEvent = {

@@ -11,12 +11,19 @@ from typing import Any, Callable
 
 from flask import jsonify, request, session
 
-from .config import Settings
-
-
 class AuthContext:
-    def __init__(self, settings: Settings):
-        self.settings = settings
+    def __init__(self, store: Any | None = None):
+        self.store = store
+
+    def api_key(self) -> str:
+        if self.store is None:
+            return ""
+        return self.store.get_effective_api_key()
+
+    def totp_secret(self) -> str:
+        if self.store is None:
+            return ""
+        return self.store.get_effective_totp_secret()
 
     def current_user(self) -> dict[str, str] | None:
         username = str(session.get("username", "") or "").strip()
@@ -32,7 +39,8 @@ class AuthContext:
         ).strip()
 
     def is_request_authorized_by_api_key(self) -> bool:
-        return bool(self.settings.api_key) and self.request_api_key() == self.settings.api_key
+        current_api_key = self.api_key()
+        return bool(current_api_key) and self.request_api_key() == current_api_key
 
     def owner_id(self) -> str:
         if self.current_user() or self.is_request_authorized_by_api_key():

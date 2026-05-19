@@ -62,7 +62,7 @@ export function SettingsModal({
           {
             key: 'system',
             label: '系统设置',
-            children: <SystemSettingsPanel open={open && activeTab === 'system'} />,
+            children: <SystemSettingsPanel open={open && activeTab === 'system'} onClose={onClose} />,
           },
           {
             key: 'automation',

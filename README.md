@@ -29,9 +29,8 @@ npm run build
 ```env
 CHATAPI_USERNAME=用户名
 CHATAPI_PASSWORD=密码
-CHATAPI_SESSION_SECRET=随机字符串
-
-CHATAPI_API_KEY=sk-你的调用API密钥
+# 可选；如果不填，后端会在首次启动时自动生成并写入数据库配置表
+# CHATAPI_SESSION_SECRET=随机字符串
 
 CHATAPI_DB_PATH=./data/chatapi.sqlite3
 CHATAPI_DATA_DIR=./data
@@ -81,8 +80,8 @@ cp .env.example .env
 ```env
 CHATAPI_USERNAME=admin
 CHATAPI_PASSWORD=change-me
-CHATAPI_SESSION_SECRET=change-this-session-secret
-CHATAPI_API_KEY=sk-xxxxx
+# 可选；如果不填，后端会在首次启动时自动生成并写入数据库配置表
+# CHATAPI_SESSION_SECRET=change-this-session-secret
 ```
 
 建议同时确认以下配置：
@@ -93,8 +92,9 @@ CHATAPI_DATA_DIR=./data
 CHATAPI_HOST=0.0.0.0
 CHATAPI_PORT=5000
 CHATAPI_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-CHATAPI_MESSAGES_PER_MINUTE_LIMIT=0
 ```
+
+登录后可以在「系统设置」里启用并保存 `API Key`、站点标题、ntfy 地址、消息限流和 TOTP，这些不再需要放在 `.env` 里。
 
 可选配置：
 
@@ -102,15 +102,9 @@ CHATAPI_MESSAGES_PER_MINUTE_LIMIT=0
 # 直接让 Flask 对外托管前端静态文件（例如 Vite build 后的 dist）
 # CHATAPI_WEB_DIST_DIR=./frontend/dist
 
-# ntfy 推送地址
-# CHATAPI_NTFY_URL=https://ntfy.sh/your-topic
-
 # 直接由 Flask 提供 HTTPS 时使用
 # CHATAPI_TLS_CERT_FILE=./certs/server.crt
 # CHATAPI_TLS_KEY_FILE=./certs/server.key
-
-# 可选 TOTP 密钥；配置后登录页面会要求输入 6 位验证码
-# CHATAPI_TOTP_SECRET=JBSWY3DPEHPK3PXP
 ```
 
 ## 4. Nginx 反向代理示例

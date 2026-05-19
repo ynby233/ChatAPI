@@ -58,8 +58,6 @@ class Settings:
     username: str
     password: str
     session_secret: str
-    totp_secret: str
-    api_key: str
     data_dir: Path
     db_path: Path
     uploads_img_dir: Path
@@ -69,9 +67,6 @@ class Settings:
     tls_cert_file: Path | None
     tls_key_file: Path | None
     web_dist_dir: Path | None
-    title: str
-    ntfy_url: str
-    messages_per_minute_limit: int
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -118,10 +113,8 @@ class Settings:
             session_secret=_first_non_empty(
                 "CHATAPI_SESSION_SECRET",
                 "ADMIN_SESSION_SECRET",
-                default="change-this-session-secret",
+                default="",
             ),
-            totp_secret=_first_non_empty("CHATAPI_TOTP_SECRET", "ADMIN_TOTP_SECRET", default=""),
-            api_key=_first_non_empty("CHATAPI_API_KEY", default=""),
             data_dir=data_dir,
             db_path=db_path,
             uploads_img_dir=uploads_img_dir,
@@ -131,15 +124,6 @@ class Settings:
             tls_cert_file=_resolve_optional_path(tls_cert_raw),
             tls_key_file=_resolve_optional_path(tls_key_raw),
             web_dist_dir=_resolve_optional_path(web_dist_raw),
-            title=_first_non_empty("CHATAPI_TITLE", default="ChatAPI"),
-            ntfy_url=_first_non_empty("CHATAPI_NTFY_URL", "NTFY_URL", default=""),
-            messages_per_minute_limit=int(
-                _first_non_empty(
-                    "CHATAPI_MESSAGES_PER_MINUTE_LIMIT",
-                    "MESSAGES_PER_MINUTE_LIMIT",
-                    default="0",
-                )
-            ),
         )
 
 

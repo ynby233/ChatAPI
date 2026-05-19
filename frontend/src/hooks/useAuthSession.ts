@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { message } from 'antd'
 
 import { requestJson } from '../lib/api'
 import type { AuthSession, AuthUser, LoginFormValues } from '../types/chat'
@@ -21,9 +22,10 @@ export function useAuthSession() {
         const nextSession = await requestJson<AuthSession>('/api/auth/session')
         if (!active) return
         setSession(nextSession)
-      } catch {
+      } catch (error) {
         if (!active) return
         setSession(DEFAULT_SESSION)
+        message.error(error instanceof Error ? error.message : '无法初始化登录状态')
       } finally {
         if (active) {
           setLoading(false)

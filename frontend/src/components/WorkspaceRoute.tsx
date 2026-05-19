@@ -172,12 +172,10 @@ export function WorkspaceRoute() {
             <ChatPane
               apiKey={workspace.apiKey}
               availableToolSchemas={workspace.availableToolSchemas}
-              bottomRef={workspace.bottomRef}
               chatScrollRef={workspace.chatScrollRef}
               composer={workspace.composer}
               composerMode={workspace.composerMode}
               draftBuffer={workspace.draftBuffer}
-              handleChatScroll={workspace.handleChatScroll}
               handleComposerKeyDown={workspace.handleComposerKeyDown}
               isMobile={isMobile}
               isWaitingForUser={workspace.isWaitingForUser}

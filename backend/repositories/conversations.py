@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import secrets
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -638,6 +639,208 @@ class ConversationStore:
                 """,
                 (key, value),
             )
+
+    @staticmethod
+    def _system_config_flag_key(name: str) -> str:
+        return f"system.{name}.enabled"
+
+    @staticmethod
+    def _system_config_value_key(name: str) -> str:
+        return f"system.{name}.value"
+
+    def get_system_config_flag(self, name: str, default: bool = False) -> bool:
+        return self.get_config(self._system_config_flag_key(name), "1" if default else "0") == "1"
+
+    def get_system_config_value(self, name: str, default: str = "") -> str:
+        return self.get_config(self._system_config_value_key(name), default)
+
+    def get_system_config_int(self, name: str, default: int = 0) -> int:
+        raw = self.get_system_config_value(name, str(default)).strip()
+        try:
+            return int(raw)
+        except ValueError:
+            return default
+
+    def set_system_config_value(self, name: str, *, enabled: bool, value: str) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO config (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (self._system_config_flag_key(name), "1" if enabled else "0"),
+            )
+            conn.execute(
+                """
+                INSERT INTO config (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (self._system_config_value_key(name), value),
+            )
+
+    def get_system_config_bundle(self, name: str, default: str = "") -> dict[str, Any]:
+        return {
+            "enabled": self.get_system_config_flag(name, False),
+            "value": self.get_system_config_value(name, default),
+        }
+
+    def get_effective_system_config_value(self, name: str, fallback: str = "") -> str:
+        bundle = self.get_system_config_bundle(name, fallback)
+        value = str(bundle["value"] or "").strip()
+        if bundle["enabled"]:
+            return value
+        return fallback
+
+    def get_effective_system_config_int(self, name: str, fallback: int = 0) -> int:
+        bundle = self.get_system_config_bundle(name, str(fallback))
+        if not bundle["enabled"]:
+            return fallback
+        raw = str(bundle["value"] or "").strip()
+        try:
+            return int(raw)
+        except ValueError:
+            return fallback
+
+    def get_effective_api_key(self) -> str:
+        if not self.get_system_config_flag("api_key", False):
+            return ""
+        return self.get_system_config_value("api_key", "").strip()
+
+    def get_effective_totp_secret(self) -> str:
+        if not self.get_system_config_flag("totp_secret", False):
+            return ""
+        return self.get_system_config_value("totp_secret", "").strip()
+
+    def get_effective_ntfy_url(self) -> str:
+        if not self.get_system_config_flag("ntfy_url", False):
+            return ""
+        return self.get_system_config_value("ntfy_url", "").strip()
+
+    def get_effective_title(self, fallback: str = "") -> str:
+        if not self.get_system_config_flag("title", False):
+            return fallback
+        value = self.get_system_config_value("title", "").strip()
+        return value or fallback
+
+    def get_effective_messages_per_minute_limit(self, fallback: int = 0) -> int:
+        if not self.get_system_config_flag("messages_per_minute_limit", False):
+            return fallback
+        raw = self.get_system_config_value("messages_per_minute_limit", str(fallback)).strip()
+        try:
+            return int(raw)
+        except ValueError:
+            return fallback
+
+    def get_system_config_snapshot(
+        self,
+    ) -> dict[str, Any]:
+        return {
+            "public_statistics": self.get_config("system.public_statistics", "0") == "1",
+            "api_key_enabled": self.get_system_config_flag("api_key", False),
+            "api_key": self.get_system_config_value("api_key", ""),
+            "title_enabled": self.get_system_config_flag("title", False),
+            "title": self.get_system_config_value("title", ""),
+            "ntfy_url_enabled": self.get_system_config_flag("ntfy_url", False),
+            "ntfy_url": self.get_system_config_value("ntfy_url", ""),
+            "messages_per_minute_limit_enabled": self.get_system_config_flag("messages_per_minute_limit", False),
+            "messages_per_minute_limit": self.get_system_config_int("messages_per_minute_limit", 0),
+            "totp_secret_enabled": self.get_system_config_flag("totp_secret", False),
+            "totp_secret": self.get_system_config_value("totp_secret", ""),
+        }
+
+    def update_system_config_snapshot(self, data: dict[str, Any]) -> None:
+        public_statistics = bool(data.get("public_statistics"))
+        raw_limit_enabled = bool(data.get("messages_per_minute_limit_enabled"))
+        raw_limit = data.get("messages_per_minute_limit", 0)
+        try:
+            limit_value = str(int(raw_limit))
+        except (TypeError, ValueError) as error:
+            raise ValueError("messages_per_minute_limit must be a number") from error
+
+        with self._connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO config (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                ("system.public_statistics", "1" if public_statistics else "0"),
+            )
+            for name in ("api_key", "title", "ntfy_url", "totp_secret"):
+                enabled = bool(data.get(f"{name}_enabled"))
+                value = str(data.get(name, ""))
+                conn.execute(
+                    """
+                    INSERT INTO config (key, value)
+                    VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                    """,
+                    (self._system_config_flag_key(name), "1" if enabled else "0"),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO config (key, value)
+                    VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                    """,
+                    (self._system_config_value_key(name), value),
+                )
+            conn.execute(
+                """
+                INSERT INTO config (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (
+                    self._system_config_flag_key("messages_per_minute_limit"),
+                    "1" if raw_limit_enabled else "0",
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO config (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (self._system_config_value_key("messages_per_minute_limit"), limit_value),
+            )
+
+    def get_or_create_config(self, key: str, default_factory) -> str:
+        with self._connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """
+                SELECT value
+                FROM config
+                WHERE key = ?
+                """,
+                (key,),
+            ).fetchone()
+            if row is not None:
+                current = str(row["value"] or "")
+                if current:
+                    return current
+
+            value = str(default_factory())
+            conn.execute(
+                """
+                INSERT INTO config (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (key, value),
+            )
+            return value
+
+    def get_or_create_session_secret(self, fallback_secret: str = "") -> str:
+        if fallback_secret.strip() == "change-this-session-secret":
+            fallback_secret = ""
+        return self.get_or_create_config(
+            "system.session_secret",
+            lambda: fallback_secret or secrets.token_urlsafe(48),
+        )
 
     def record_assistant_reply(
         self,
