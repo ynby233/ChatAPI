@@ -5,6 +5,7 @@ from flask import Flask, current_app, jsonify, request
 from ..core import AuthContext
 from ..repositories import ConversationStore, UserStore
 from ..services.email import resolve_email_provider, get_available_email_providers, send_test_email
+from ..services.realtime import RealtimeBroker
 
 
 def register_admin_routes(
@@ -20,12 +21,40 @@ def register_admin_routes(
     def list_users():
         users = user_store.list_users()
         key_counts = user_store.get_api_key_counts()
+        realtime = app.extensions.get("chat_realtime")
         result = []
         for u in users:
             d = u.to_dict()
             d["api_key_count"] = key_counts.get(u.id, 0)
+            d["current_connection_count"] = (
+                realtime.count_owner_connections(u.id)
+                if isinstance(realtime, RealtimeBroker)
+                else 0
+            )
             result.append(d)
         return {"ok": True, "users": result}
+
+    @app.get("/api/admin/users/<user_id>/history")
+    @auth.require_admin
+    def get_user_history(user_id: str):
+        user = user_store.get_user(user_id)
+        if user is None:
+            return jsonify({"error": "用户不存在"}), 404
+
+        limit_raw = request.args.get("limit", "20")
+        try:
+            limit = int(limit_raw)
+        except (TypeError, ValueError):
+            return jsonify({"error": "limit 必须是整数"}), 400
+        if limit < 1:
+            return jsonify({"error": "limit 必须大于 0"}), 400
+
+        recent_messages = store.get_recent_messages(user_id, limit=limit)
+        return {
+            "ok": True,
+            "user": user.to_dict(),
+            "recent_messages": recent_messages,
+        }
 
     @app.post("/api/admin/users")
     @auth.require_admin

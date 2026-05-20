@@ -288,6 +288,16 @@ class UserStore:
             for row in rows
         ]
 
+    def count_api_keys(self, user_id: str) -> int:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM user_api_keys WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        if row is None:
+            return 0
+        return int(row["cnt"])
+
     def get_api_key_counts(self) -> dict[str, int]:
         with self._connection() as conn:
             rows = conn.execute(

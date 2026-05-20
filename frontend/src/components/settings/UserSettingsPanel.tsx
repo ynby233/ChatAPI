@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Divider, Input, InputNumber, Switch, Typography } from 'antd'
+import { Button, Divider, Form, Input, InputNumber, Switch, Typography } from 'antd'
 
 import { appMessage } from '../../lib/antdApp'
 import { requestJson } from '../../lib/api'
@@ -25,6 +25,8 @@ export function UserSettingsPanel({ open, onClose, totpEnabled, onTotpRefresh }:
   const [savedConfig, setSavedConfig] = useState<UserConfig>(DEFAULT_CONFIG)
   const [, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [resettingPassword, setResettingPassword] = useState(false)
+  const [passwordForm] = Form.useForm<{ password: string; confirmPassword: string }>()
 
   useEffect(() => {
     if (!open) return
@@ -86,6 +88,26 @@ export function UserSettingsPanel({ open, onClose, totpEnabled, onTotpRefresh }:
       appMessage.error(error instanceof Error ? error.message : '用户设置保存失败')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleResetPassword(values: { password: string; confirmPassword: string }) {
+    if (values.password !== values.confirmPassword) {
+      appMessage.error('两次输入的密码不一致')
+      return
+    }
+    setResettingPassword(true)
+    try {
+      await requestJson<{ ok: boolean }>('/api/user/password', {
+        method: 'POST',
+        body: JSON.stringify({ password: values.password }),
+      })
+      passwordForm.resetFields()
+      appMessage.success('密码已重置')
+    } catch (error) {
+      appMessage.error(error instanceof Error ? error.message : '密码重置失败')
+    } finally {
+      setResettingPassword(false)
     }
   }
 
@@ -171,6 +193,55 @@ export function UserSettingsPanel({ open, onClose, totpEnabled, onTotpRefresh }:
           <Button type="primary" disabled={!hasUnsavedChanges} loading={saving} onClick={() => void handleSave()}>
             保存
           </Button>
+        </div>
+      </div>
+
+      <Divider />
+
+      <div className="system-settings-rows">
+        <div className="system-settings-row system-settings-row-stacked">
+          <Typography.Text className="system-settings-row-title">重置密码</Typography.Text>
+          <div className="system-settings-row-body system-settings-row-body-stacked">
+
+            <div className="system-settings-row-field system-settings-row-field-visible system-settings-row-field-static">
+              <Form
+                form={passwordForm}
+                layout="vertical"
+                onFinish={(values) => void handleResetPassword(values)}
+              >
+                <Form.Item
+                  label="新密码"
+                  name="password"
+                  rules={[{ required: true, message: '请输入新密码' }]}
+                >
+                  <Input.Password placeholder="至少 4 个字符" />
+                </Form.Item>
+                <Form.Item
+                  label="确认新密码"
+                  name="confirmPassword"
+                  dependencies={['password']}
+                  rules={[
+                    { required: true, message: '请再次输入新密码' },
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (!value || getFieldValue('password') === value) {
+                          return Promise.resolve()
+                        }
+                        return Promise.reject(new Error('两次输入的密码不一致'))
+                      },
+                    }),
+                  ]}
+                >
+                  <Input.Password placeholder="再次输入新密码" />
+                </Form.Item>
+                <Form.Item style={{ marginBottom: 0 }}>
+                  <Button type="primary" htmlType="submit" loading={resettingPassword}>
+                    重置密码
+                  </Button>
+                </Form.Item>
+              </Form>
+            </div>
+          </div>
         </div>
       </div>
 

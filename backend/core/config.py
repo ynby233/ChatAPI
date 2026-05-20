@@ -64,6 +64,7 @@ class Settings:
     cors_origins: list[str]
     host: str
     port: int
+    debug: bool
     tls_cert_file: Path | None
     tls_key_file: Path | None
     web_dist_dir: Path | None
@@ -137,6 +138,7 @@ class Settings:
             cors_origins=_split_csv(cors_raw),
             host=_first_non_empty("CHATAPI_HOST", "BACKEND_HOST", default="0.0.0.0"),
             port=int(_first_non_empty("CHATAPI_PORT", "BACKEND_PORT", default="5000")),
+            debug=_first_non_empty("CHATAPI_DEBUG", "FLASK_DEBUG", default="0") == "1",
             tls_cert_file=_resolve_optional_path(tls_cert_raw),
             tls_key_file=_resolve_optional_path(tls_key_raw),
             web_dist_dir=_resolve_optional_path(web_dist_raw),

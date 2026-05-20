@@ -1,10 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Button, Form, Input, Modal, Popconfirm, Select, Table, Typography } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  Button,
+  Descriptions,
+  Form,
+  Input,
+  Modal,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  Select,
+} from 'antd'
+import { DeleteOutlined, HistoryOutlined, PlusOutlined, SafetyOutlined } from '@ant-design/icons'
 
 import { appMessage } from '../../lib/antdApp'
 import { requestJson } from '../../lib/api'
-import type { User } from '../../types/chat'
+import type { AdminUserHistoryMessage, AdminUserHistoryResponse, User } from '../../types/chat'
 
 type UserManagementPanelProps = {
   open: boolean
@@ -23,9 +34,15 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
   const [pwForm] = Form.useForm()
   const [pwSubmitting, setPwSubmitting] = useState(false)
 
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [detailUser, setDetailUser] = useState<User | null>(null)
+  const [historyMessages, setHistoryMessages] = useState<AdminUserHistoryMessage[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
   useEffect(() => {
     if (!open) return
     let active = true
+
     async function loadUsers() {
       setLoading(true)
       try {
@@ -39,9 +56,39 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
         if (active) setLoading(false)
       }
     }
+
     void loadUsers()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [open])
+
+  useEffect(() => {
+    const userId = detailUser?.id
+    if (!detailModalOpen || !userId) return
+    let active = true
+
+    async function loadHistory() {
+      setHistoryLoading(true)
+      try {
+        const data = await requestJson<AdminUserHistoryResponse>(
+          `/api/admin/users/${userId}/history?limit=30`,
+        )
+        if (!active) return
+        setHistoryMessages(data.recent_messages)
+      } catch (error) {
+        if (!active) return
+        appMessage.error(error instanceof Error ? error.message : '加载历史消息失败')
+      } finally {
+        if (active) setHistoryLoading(false)
+      }
+    }
+
+    void loadHistory()
+    return () => {
+      active = false
+    }
+  }, [detailModalOpen, detailUser?.id])
 
   async function handleCreate(values: { username: string; password: string; role: string }) {
     setCreating(true)
@@ -65,6 +112,11 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
     try {
       await requestJson(`/api/admin/users/${userId}`, { method: 'DELETE' })
       setUsers((prev) => prev.filter((u) => u.id !== userId))
+      if (detailUser?.id === userId) {
+        setDetailModalOpen(false)
+        setDetailUser(null)
+        setHistoryMessages([])
+      }
       appMessage.success('用户已删除')
     } catch (error) {
       appMessage.error(error instanceof Error ? error.message : '删除用户失败')
@@ -78,6 +130,23 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
     setPwUsername(user.username)
     pwForm.resetFields()
     setPwModalOpen(true)
+  }
+
+  function openDeleteConfirm(user: User) {
+    Modal.confirm({
+      title: `删除用户：${user.username}`,
+      content: '删除后该用户的所有会话、消息和 API Key 都会被清理，且无法恢复。',
+      okText: '删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => handleDelete(user.id),
+    })
+  }
+
+  function openDetailModal(user: User) {
+    setDetailUser(user)
+    setHistoryMessages([])
+    setDetailModalOpen(true)
   }
 
   async function handlePasswordChange() {
@@ -105,7 +174,7 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
       title: '角色',
       dataIndex: 'role',
       key: 'role',
-      render: (role: string) => role === 'admin' ? '管理员' : '普通用户',
+      render: (role: string) => (role === 'admin' ? '管理员' : '普通用户'),
     },
     {
       title: 'API Keys',
@@ -114,47 +183,87 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
       render: (v: number | undefined) => v ?? 0,
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (v: string) => v ? new Date(v).toLocaleString() : '-',
-    },
-    {
-      title: '上次登录',
-      dataIndex: 'last_login_at',
-      key: 'last_login_at',
-      render: (v: string | undefined) => v ? new Date(v).toLocaleString() : '未登录',
+      title: '当前连接数',
+      dataIndex: 'current_connection_count',
+      key: 'current_connection_count',
+      render: (v: number | undefined) => v ?? 0,
     },
     {
       title: '操作',
       key: 'action',
       render: (_: unknown, record: User) => (
-        <span>
+        <Space size={8} wrap>
           <Button
-            type="link"
-            icon={<EditOutlined />}
+            size="small"
+            icon={<HistoryOutlined />}
+            onClick={() => openDetailModal(record)}
+          >
+            查看历史消息
+          </Button>
+          <Button
+            size="small"
+            icon={<SafetyOutlined />}
             onClick={() => openPasswordModal(record)}
           >
-            修改密码
+            重置密码
           </Button>
-          <Popconfirm
-            title="确定删除该用户？"
-            description="删除后该用户的所有数据将丢失"
-            onConfirm={() => handleDelete(record.id)}
-            okText="删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
+          <Button
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            loading={deletingId === record.id}
+            onClick={() => openDeleteConfirm(record)}
           >
-            <Button
-              type="link"
-              danger
-              icon={<DeleteOutlined />}
-              loading={deletingId === record.id}
-            >
-              删除
-            </Button>
-          </Popconfirm>
-        </span>
+            删除
+          </Button>
+        </Space>
+      ),
+    },
+  ]
+
+  const historyColumns = [
+    {
+      title: '时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 190,
+      render: (v: string) => (v ? new Date(v).toLocaleString() : '-'),
+    },
+    {
+      title: '会话',
+      dataIndex: 'conversation_title',
+      key: 'conversation_title',
+      width: 180,
+      render: (v: string, record: AdminUserHistoryMessage) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text>{v || '未命名会话'}</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {record.conversation_id}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: '角色',
+      dataIndex: 'role',
+      key: 'role',
+      width: 90,
+      render: (role: string) => {
+        const color = role === 'assistant' ? 'blue' : role === 'user' ? 'green' : 'default'
+        return <Tag color={color}>{role || '-'}</Tag>
+      },
+    },
+    {
+      title: '内容',
+      dataIndex: 'content',
+      key: 'content',
+      render: (value: string) => (
+        <Typography.Paragraph
+          style={{ marginBottom: 0 }}
+          ellipsis={{ rows: 2, expandable: true, symbol: '展开' }}
+        >
+          {value || '-'}
+        </Typography.Paragraph>
       ),
     },
   ]
@@ -205,18 +314,87 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
         dataSource={users}
         rowKey="id"
         loading={loading}
-        pagination={false}
+        pagination={{
+          defaultPageSize: 10,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          pageSizeOptions: ['5', '10', '20', '50'],
+          showTotal: (total) => `共 ${total} 条`,
+        }}
         size="small"
       />
 
       <Modal
-        title={`修改密码 - ${pwUsername}`}
+        title={`查看历史消息 - ${detailUser?.username ?? ''}`}
+        open={detailModalOpen}
+        onCancel={() => {
+          setDetailModalOpen(false)
+          setDetailUser(null)
+          setHistoryMessages([])
+        }}
+        footer={null}
+        width={1060}
+        destroyOnHidden
+      >
+        <div className="user-history-modal">
+          <Descriptions bordered column={2} size="small" className="user-history-descriptions">
+            <Descriptions.Item label="用户名">{detailUser?.username ?? '-'}</Descriptions.Item>
+            <Descriptions.Item label="角色">
+              {detailUser?.role === 'admin' ? '管理员' : '普通用户'}
+            </Descriptions.Item>
+            <Descriptions.Item label="API Keys">{detailUser?.api_key_count ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="当前连接数">
+              {detailUser?.current_connection_count ?? 0}
+            </Descriptions.Item>
+            <Descriptions.Item label="创建时间" span={2}>
+              {detailUser?.created_at ? new Date(detailUser.created_at).toLocaleString() : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="历史登录" span={2}>
+              {detailUser?.last_login_at ? new Date(detailUser.last_login_at).toLocaleString() : '未登录'}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <div className="user-history-actions">
+            <Button
+              icon={<SafetyOutlined />}
+              onClick={() => detailUser && openPasswordModal(detailUser)}
+            >
+              重置密码
+            </Button>
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              loading={detailUser ? deletingId === detailUser.id : false}
+              onClick={() => detailUser && openDeleteConfirm(detailUser)}
+            >
+              删除用户
+            </Button>
+          </div>
+
+          <Table
+            className="user-history-table"
+            columns={historyColumns}
+            dataSource={historyMessages}
+            rowKey="id"
+            loading={historyLoading}
+            pagination={false}
+            size="small"
+            locale={{
+              emptyText: historyLoading ? '加载中...' : '暂无历史消息',
+            }}
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        title={`重置密码 - ${pwUsername}`}
         open={pwModalOpen}
         onOk={handlePasswordChange}
         onCancel={() => setPwModalOpen(false)}
         confirmLoading={pwSubmitting}
         okText="确认修改"
         cancelText="取消"
+        destroyOnHidden
       >
         <Form form={pwForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item

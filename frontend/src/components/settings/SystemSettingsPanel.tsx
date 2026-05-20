@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Input, Select, Switch, Typography } from 'antd'
+import { Button, Input, InputNumber, Select, Switch, Typography } from 'antd'
 
 import { appMessage } from '../../lib/antdApp'
 import { requestJson } from '../../lib/api'
@@ -20,6 +20,7 @@ const DEFAULT_CONFIG: SystemConfig = {
   email_provider_options: [],
   registration_email_domain_restriction_enabled: false,
   registration_email_domains: '',
+  api_key_limit_per_user: 0,
 }
 
 function normalizeSystemConfig(data: Partial<SystemConfig> & { ok?: boolean }): SystemConfig {
@@ -40,6 +41,7 @@ function normalizeSystemConfig(data: Partial<SystemConfig> & { ok?: boolean }): 
       : [],
     registration_email_domain_restriction_enabled: Boolean(data.registration_email_domain_restriction_enabled),
     registration_email_domains: String(data.registration_email_domains ?? ''),
+    api_key_limit_per_user: Number(data.api_key_limit_per_user ?? 0),
   }
 
   if (nextConfig.email_verification_enabled && !nextConfig.email_provider && nextConfig.email_provider_options.length > 0) {
@@ -96,7 +98,8 @@ export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps)
         || config.email_verification_enabled !== savedConfig.email_verification_enabled
         || config.email_provider !== savedConfig.email_provider
         || config.registration_email_domain_restriction_enabled !== savedConfig.registration_email_domain_restriction_enabled
-        || config.registration_email_domains !== savedConfig.registration_email_domains,
+        || config.registration_email_domains !== savedConfig.registration_email_domains
+        || config.api_key_limit_per_user !== savedConfig.api_key_limit_per_user,
     }),
     [config, savedConfig],
   )
@@ -293,6 +296,26 @@ export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps)
             unCheckedChildren="关闭"
             onChange={(checked) => updateSection('registration_email_domain_restriction_enabled', checked)}
           />
+        </div>
+
+        <div className="system-settings-row">
+          <Typography.Text className="system-settings-row-title">API Key 数量上限</Typography.Text>
+          <div className="system-settings-row-body">
+            <Typography.Text className="system-settings-row-help">
+              限制每个账号最多可创建的 API Key 数量。填 0 表示不限制。
+            </Typography.Text>
+            <div className="system-settings-row-field system-settings-row-field-visible">
+              <InputNumber
+                value={config.api_key_limit_per_user}
+                min={0}
+                precision={0}
+                controls
+                className="system-settings-number-input"
+                placeholder="0"
+                onChange={(value) => updateSection('api_key_limit_per_user', Number(value ?? 0))}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="system-settings-row">

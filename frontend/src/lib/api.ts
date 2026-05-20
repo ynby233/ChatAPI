@@ -1,3 +1,7 @@
+type RequestError = Error & {
+  responseBody?: unknown
+}
+
 function resolveRequestUrl(url: string): string {
   if (/^(?:[a-z]+:)?\/\//i.test(url)) {
     return url
@@ -28,10 +32,10 @@ export async function requestJson<T>(url: string, init?: RequestInit): Promise<T
     const fallback =
       body?.error?.message ?? body?.error ?? body?.message ?? '请求失败'
     const errorMessage = typeof fallback === 'string' ? fallback : '请求失败'
-    const error = new Error(errorMessage)
+    const error: RequestError = new Error(errorMessage)
     // Attach additional error details from the response body
     if (body && typeof body === 'object') {
-      ;(error as any).responseBody = body
+      error.responseBody = body
     }
     throw error
   }

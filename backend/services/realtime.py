@@ -42,6 +42,10 @@ class RealtimeBroker:
             if not self._subscriptions_by_owner[subscription.owner_id]:
                 self._subscriptions_by_owner.pop(subscription.owner_id, None)
 
+    def count_owner_connections(self, owner_id: str) -> int:
+        with self._lock:
+            return len(self._subscriptions_by_owner.get(owner_id, ()))
+
     def publish_snapshot(self, owner_id: str) -> None:
         self._publish(owner_id, self.build_snapshot(owner_id))
 

@@ -95,6 +95,11 @@ class SystemConfigStore:
         return domain.strip().lower() in domains
 
     def get_system_config_snapshot(self) -> dict[str, Any]:
+        api_key_limit_raw = self.get_system_config("value.api_key_limit_per_user", "0").strip()
+        try:
+            api_key_limit_per_user = max(0, int(api_key_limit_raw or "0"))
+        except ValueError:
+            api_key_limit_per_user = 0
         return {
             "public_statistics": self.get_system_config_flag("public_statistics", False),
             "title_enabled": self.get_system_config_flag("flag.title", False),
@@ -113,12 +118,19 @@ class SystemConfigStore:
                 False,
             ),
             "registration_email_domains": self.get_system_config("value.registration_email_domains", ""),
+            "api_key_limit_per_user": api_key_limit_per_user,
         }
 
     def update_system_config_snapshot(self, data: dict[str, Any]) -> None:
         registration_email_domain_restriction_enabled = bool(
             data.get("registration_email_domain_restriction_enabled"),
         )
+        try:
+            api_key_limit_per_user = int(data.get("api_key_limit_per_user", 0) or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("每个账号 API Key 数量上限必须是大于等于 0 的整数") from exc
+        if api_key_limit_per_user < 0:
+            raise ValueError("每个账号 API Key 数量上限必须是大于等于 0 的整数")
         if registration_email_domain_restriction_enabled:
             registration_email_domains = self._normalize_registration_email_domains(
                 str(data.get("registration_email_domains", "")),
@@ -150,6 +162,10 @@ class SystemConfigStore:
         self.set_system_config(
             "value.registration_email_domains",
             registration_email_domains,
+        )
+        self.set_system_config(
+            "value.api_key_limit_per_user",
+            str(api_key_limit_per_user),
         )
 
     def get_effective_title(self, fallback: str = "") -> str:

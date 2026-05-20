@@ -382,6 +382,44 @@ class ConversationStore:
             for row in rows
         ]
 
+    def get_recent_messages(self, owner_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 100))
+        with self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    m.id,
+                    m.conversation_id,
+                    c.title AS conversation_title,
+                    m.role,
+                    m.content,
+                    m.status,
+                    m.response_id,
+                    m.metadata,
+                    m.created_at
+                FROM messages m
+                JOIN conversations c ON c.id = m.conversation_id
+                WHERE c.owner_id = ?
+                ORDER BY datetime(m.created_at) DESC, m.id DESC
+                LIMIT ?
+                """,
+                (owner_id, limit),
+            ).fetchall() 
+        return [
+            {
+                "id": str(row["id"]),
+                "conversation_id": str(row["conversation_id"]),
+                "conversation_title": str(row["conversation_title"] or ""),
+                "role": str(row["role"]),
+                "content": str(row["content"]),
+                "status": str(row["status"]),
+                "response_id": str(row["response_id"]) if row["response_id"] else None,
+                "metadata": _json_load(row["metadata"], {}),
+                "created_at": str(row["created_at"]),
+            }
+            for row in rows
+        ]
+
     def iter_messages(self) -> list[ConversationMessage]:
         with self._connection() as conn:
             rows = conn.execute(

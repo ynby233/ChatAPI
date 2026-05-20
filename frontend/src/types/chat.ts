@@ -20,6 +20,25 @@ export type User = {
   created_at: string
   last_login_at?: string
   api_key_count?: number
+  current_connection_count?: number
+}
+
+export type AdminUserHistoryMessage = {
+  id: string
+  conversation_id: string
+  conversation_title: string
+  role: 'user' | 'assistant' | 'system' | string
+  content: string
+  status?: string
+  response_id?: string | null
+  metadata?: Record<string, unknown>
+  created_at: string
+}
+
+export type AdminUserHistoryResponse = {
+  ok: boolean
+  user: User
+  recent_messages: AdminUserHistoryMessage[]
 }
 
 export type ApiKeyInfo = {
@@ -27,6 +46,12 @@ export type ApiKeyInfo = {
   name: string
   api_key: string
   created_at: string
+}
+
+export type ApiKeyListResponse = {
+  ok: boolean
+  api_keys: ApiKeyInfo[]
+  api_key_limit_per_user: number
 }
 
 export type UserConfig = {
@@ -186,6 +211,7 @@ export type SystemConfig = {
   }>
   registration_email_domain_restriction_enabled: boolean
   registration_email_domains: string
+  api_key_limit_per_user: number
 }
 
 export type RegisterConfig = {
@@ -193,6 +219,12 @@ export type RegisterConfig = {
   email_verification_enabled: boolean
   registration_email_domain_restriction_enabled: boolean
   registration_email_domains: string
+  geetest_enabled: boolean
+  geetest_captcha_id: string
+}
+
+export type PasswordResetConfig = {
+  password_reset_enabled: boolean
   geetest_enabled: boolean
   geetest_captcha_id: string
 }

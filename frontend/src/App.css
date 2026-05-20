@@ -1173,6 +1173,10 @@
   min-height: 42px;
 }
 
+.system-settings-row-stacked {
+  align-items: start;
+}
+
 .system-settings-row + .system-settings-row {
   border-top: 1px solid color-mix(in srgb, var(--app-border) 62%, transparent);
 }
@@ -1190,6 +1194,14 @@
   min-height: 28px;
   display: flex;
   align-items: center;
+}
+
+.system-settings-row-body-stacked {
+  position: static;
+  display: grid;
+  gap: 12px;
+  align-items: start;
+  min-height: 0;
 }
 
 .system-settings-row-help,
@@ -1225,6 +1237,17 @@
 .system-settings-row-field {
   max-height: 40px;
   transform: translateY(3px);
+}
+
+.system-settings-row-help-static,
+.system-settings-row-field-static {
+  position: static;
+  inset: auto;
+  display: block;
+  max-height: none;
+  transform: none;
+  overflow: visible;
+  pointer-events: auto;
 }
 
 .system-settings-row-field-visible {
@@ -1329,6 +1352,33 @@
 
 .user-management-table {
   border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  background: linear-gradient(180deg, var(--app-bg-panel-strong), var(--app-bg-subtle));
+  box-shadow: none;
+}
+
+.user-history-modal {
+  display: grid;
+  gap: 16px;
+}
+
+.user-history-descriptions {
+  background: linear-gradient(180deg, var(--app-bg-panel-strong), var(--app-bg-subtle));
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.user-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.user-history-table {
+  border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--app-border);
   background: linear-gradient(180deg, var(--app-bg-panel-strong), var(--app-bg-subtle));
@@ -2179,8 +2229,15 @@ body.image-preview-open {
 
 .login-register-row {
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 8px;
   margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+.login-register-separator {
+  color: var(--app-text-secondary);
 }
 
 .login-register-link {

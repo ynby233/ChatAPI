@@ -15,6 +15,7 @@ type LoginScreenProps = {
   geetestCaptchaRef: MutableRefObject<GeetestCaptcha | null>
   onSubmit: (values: LoginFormValues) => void | Promise<void>
   onNavigateToRegister: () => void
+  onNavigateToForgotPassword: () => void
 }
 
 export function LoginScreen({
@@ -26,6 +27,7 @@ export function LoginScreen({
   geetestCaptchaId,
   geetestCaptchaRef,
   onNavigateToRegister,
+  onNavigateToForgotPassword,
 }: LoginScreenProps) {
   const [form] = Form.useForm<LoginFormValues>()
 
@@ -108,8 +110,18 @@ export function LoginScreen({
               <Typography.Link className="login-register-link" onClick={onNavigateToRegister}>
                 注册
               </Typography.Link>
+              <Typography.Text className="login-register-separator">或</Typography.Text>
+              <Typography.Link className="login-register-link" onClick={onNavigateToForgotPassword}>
+                忘记密码？
+              </Typography.Link>
             </div>
-          ) : null}
+          ) : (
+            <div className="login-register-row">
+              <Typography.Link className="login-register-link" onClick={onNavigateToForgotPassword}>
+                忘记密码？
+              </Typography.Link>
+            </div>
+          )}
         </Form>
       </Card>
     </div>

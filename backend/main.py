@@ -31,7 +31,7 @@ def main() -> None:
     app.run(
         host=settings.host,
         port=settings.port,
-        debug=True,
+        debug=settings.debug,
         ssl_context=ssl_context,
     )
 

@@ -5,16 +5,16 @@ import { CosmicBackdrop } from './CosmicBackdrop'
 import { GeetestCaptchaField, type GeetestCaptcha } from './GeetestCaptchaField'
 import { appMessage } from '../lib/antdApp'
 import { requestJson } from '../lib/api'
-import type { GeetestValidationResult, RegisterConfig } from '../types/chat'
+import type { GeetestValidationResult, PasswordResetConfig } from '../types/chat'
 
-type RegistrationScreenProps = {
-  onRegistered: () => void | Promise<void>
+type ForgotPasswordScreenProps = {
+  onReset: () => void | Promise<void>
   onBackToLogin: () => void
 }
 
-export function RegistrationScreen({ onRegistered, onBackToLogin }: RegistrationScreenProps) {
+export function ForgotPasswordScreen({ onReset, onBackToLogin }: ForgotPasswordScreenProps) {
   const [form] = Form.useForm()
-  const [config, setConfig] = useState<RegisterConfig | null>(null)
+  const [config, setConfig] = useState<PasswordResetConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
   const [codeCountdown, setCodeCountdown] = useState(0)
@@ -24,23 +24,17 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
     let active = true
     async function load() {
       try {
-        const data = await requestJson<{ ok: boolean } & RegisterConfig>('/api/auth/register/config')
+        const data = await requestJson<{ ok: boolean } & PasswordResetConfig>('/api/auth/password/config')
         if (!active) return
         setConfig({
-          registration_enabled: Boolean(data.registration_enabled),
-          email_verification_enabled: Boolean(data.email_verification_enabled),
-          registration_email_domain_restriction_enabled: Boolean(data.registration_email_domain_restriction_enabled),
-          registration_email_domains: String(data.registration_email_domains ?? ''),
+          password_reset_enabled: Boolean(data.password_reset_enabled),
           geetest_enabled: Boolean(data.geetest_enabled),
           geetest_captcha_id: String(data.geetest_captcha_id ?? ''),
         })
       } catch {
         if (!active) return
         setConfig({
-          registration_enabled: false,
-          email_verification_enabled: false,
-          registration_email_domain_restriction_enabled: false,
-          registration_email_domains: '',
+          password_reset_enabled: false,
           geetest_enabled: false,
           geetest_captcha_id: '',
         })
@@ -52,7 +46,7 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
 
   useEffect(() => {
     if (codeCountdown <= 0) return
-    const timer = setTimeout(() => setCodeCountdown((c) => c - 1), 1000)
+    const timer = setTimeout(() => setCodeCountdown((value) => value - 1), 1000)
     return () => clearTimeout(timer)
   }, [codeCountdown])
 
@@ -62,6 +56,7 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
       appMessage.warning('请先输入有效的邮箱地址')
       return
     }
+
     let geetestParams: GeetestValidationResult | undefined
     if (config?.geetest_enabled) {
       const result = captchaRef.current?.getValidate()
@@ -71,11 +66,15 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
       }
       geetestParams = result
     }
+
     setSendingCode(true)
     try {
-      await requestJson<{ ok: boolean }>('/api/auth/register/send-code', {
+      await requestJson<{ ok: boolean }>('/api/auth/password/send-code', {
         method: 'POST',
-        body: JSON.stringify({ email, geetest_params: geetestParams }),
+        body: JSON.stringify({
+          email,
+          geetest_params: geetestParams,
+        }),
       })
       appMessage.success('验证码已发送')
       setCodeCountdown(60)
@@ -96,35 +95,18 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
       }
 
       setLoading(true)
-
-      let geetestParams: GeetestValidationResult | undefined
-      if (config?.geetest_enabled && captchaRef.current) {
-        const result = captchaRef.current.getValidate()
-        if (!result) {
-          appMessage.warning('请先完成人机验证')
-          setLoading(false)
-          return
-        }
-        geetestParams = result
-      }
-
-      await requestJson<{ ok: boolean; user?: unknown }>('/api/auth/register', {
+      await requestJson<{ ok: boolean }>('/api/auth/password/reset', {
         method: 'POST',
         body: JSON.stringify({
           email: values.email,
+          code: values.code,
           password: values.password,
-          code: values.code || '',
-          geetest_params: geetestParams,
         }),
       })
-
-      appMessage.success('注册成功，请登录')
-      onRegistered()
+      appMessage.success('密码已重置，请重新登录')
+      onReset()
     } catch (error) {
-      appMessage.error(error instanceof Error ? error.message : '注册失败')
-      if (captchaRef.current) {
-        captchaRef.current.reset()
-      }
+      appMessage.error(error instanceof Error ? error.message : '重置密码失败')
     } finally {
       setLoading(false)
     }
@@ -138,7 +120,7 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
     )
   }
 
-  if (!config.registration_enabled) {
+  if (!config.password_reset_enabled) {
     return (
       <div className="login-screen">
         <CosmicBackdrop />
@@ -147,16 +129,15 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
         <Card className="login-card">
           <div className="login-copy">
             <Typography.Title level={2} className="login-title">
-              注册未开放
+              忘记密码
             </Typography.Title>
             <Typography.Paragraph className="login-desc" style={{ textAlign: 'center' }}>
-              当前系统未开放外部注册，请联系管理员开通。
+              当前系统未配置邮件发送方式，暂时无法通过邮箱找回密码，请联系管理员处理。
             </Typography.Paragraph>
           </div>
           <div className="login-register-row">
-            <Typography.Text>已有账号？</Typography.Text>
             <Typography.Link className="login-register-link" onClick={onBackToLogin}>
-              登录
+              返回登录
             </Typography.Link>
           </div>
         </Card>
@@ -172,13 +153,11 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
       <Card className="login-card">
         <div className="login-copy">
           <Typography.Title level={2} className="login-title">
-            ChatAPI 注册
+            忘记密码
           </Typography.Title>
-          {config.registration_email_domain_restriction_enabled ? (
-            <Typography.Paragraph className="login-desc" style={{ textAlign: 'center', marginBottom: 0 }}>
-              当前仅允许 {config.registration_email_domains || '指定'} 邮箱域名注册。
-            </Typography.Paragraph>
-          ) : null}
+          <Typography.Paragraph className="login-desc" style={{ textAlign: 'center', marginBottom: 0 }}>
+            通过邮箱验证码重置密码。
+          </Typography.Paragraph>
         </div>
         <Form
           form={form}
@@ -186,7 +165,7 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
           onFinish={() => void handleSubmit()}
           autoComplete="off"
           className="login-form"
-          initialValues={{ email: '', password: '', confirmPassword: '', code: '' }}
+          initialValues={{ email: '', code: '', password: '', confirmPassword: '' }}
         >
           <Form.Item
             label="邮箱"
@@ -198,19 +177,49 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
           >
             <Input placeholder="邮箱地址" size="large" />
           </Form.Item>
+          <GeetestCaptchaField
+            enabled={config.geetest_enabled}
+            captchaId={config.geetest_captcha_id}
+            containerId="geetest-forgot-password-container"
+            captchaRef={captchaRef}
+          />
           <Form.Item
-            label="密码"
-            name="password"
-            rules={[{ required: true, message: '请输入密码' }]}
+            label="验证码"
+            name="code"
+            rules={[{ required: true, message: '请输入邮箱验证码' }]}
           >
-            <Input.Password placeholder="密码（至少 4 个字符）" size="large" />
+            <Input
+              placeholder="6 位邮箱验证码"
+              size="large"
+              inputMode="numeric"
+              maxLength={6}
+              addonAfter={
+                <Button
+                  type="link"
+                  size="small"
+                  disabled={codeCountdown > 0 || sendingCode}
+                  loading={sendingCode}
+                  onClick={() => void handleSendCode()}
+                  style={{ padding: 0, margin: 0 }}
+                >
+                  {codeCountdown > 0 ? `${codeCountdown}s` : '发送验证码'}
+                </Button>
+              }
+            />
           </Form.Item>
           <Form.Item
-            label="确认密码"
+            label="新密码"
+            name="password"
+            rules={[{ required: true, message: '请输入新密码' }]}
+          >
+            <Input.Password placeholder="至少 4 个字符" size="large" />
+          </Form.Item>
+          <Form.Item
+            label="确认新密码"
             name="confirmPassword"
             dependencies={['password']}
             rules={[
-              { required: true, message: '请再次输入密码' },
+              { required: true, message: '请再次输入新密码' },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('password') === value) {
@@ -221,47 +230,14 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
               }),
             ]}
           >
-            <Input.Password placeholder="再次输入密码" size="large" />
+            <Input.Password placeholder="再次输入新密码" size="large" />
           </Form.Item>
-          <GeetestCaptchaField
-            enabled={config.geetest_enabled}
-            captchaId={config.geetest_captcha_id}
-            containerId="geetest-register-container"
-            captchaRef={captchaRef}
-          />
-          {config.email_verification_enabled ? (
-            <Form.Item
-              label="验证码"
-              name="code"
-              rules={[{ required: true, message: '请输入邮箱验证码' }]}
-            >
-              <Input
-                placeholder="6 位邮箱验证码"
-                size="large"
-                inputMode="numeric"
-                maxLength={6}
-                addonAfter={
-                  <Button
-                    type="link"
-                    size="small"
-                    disabled={codeCountdown > 0 || sendingCode}
-                    loading={sendingCode}
-                    onClick={() => void handleSendCode()}
-                    style={{ padding: 0, margin: 0 }}
-                  >
-                    {codeCountdown > 0 ? `${codeCountdown}s` : '发送验证码'}
-                  </Button>
-                }
-              />
-            </Form.Item>
-          ) : null}
           <Button type="primary" htmlType="submit" size="large" block loading={loading}>
-            注册
+            重置密码
           </Button>
           <div className="login-register-row">
-            <Typography.Text>已有账号？</Typography.Text>
             <Typography.Link className="login-register-link" onClick={onBackToLogin}>
-              登录
+              返回登录
             </Typography.Link>
           </div>
         </Form>

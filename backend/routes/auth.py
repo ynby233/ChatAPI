@@ -18,7 +18,7 @@ from ..repositories import SystemConfigStore, UserStore
 from ..services.email import get_available_email_providers, resolve_email_provider, send_verification_email
 
 
-# In-memory verification code store: { email: (code, expiry_timestamp) }
+# In-memory verification code store: { purpose:email: (code, expiry_timestamp) }
 _verification_codes: dict[str, tuple[str, float]] = {}
 _CODE_TTL = 300  # 5 minutes
 
@@ -28,6 +28,31 @@ def _cleanup_expired_codes() -> None:
     expired = [email for email, (_, exp) in _verification_codes.items() if now > exp]
     for email in expired:
         del _verification_codes[email]
+
+
+def _verification_code_key(*, purpose: str, email: str) -> str:
+    return f"{purpose}:{email.strip().lower()}"
+
+
+def _store_verification_code(*, purpose: str, email: str, code: str) -> None:
+    _verification_codes[_verification_code_key(purpose=purpose, email=email)] = (
+        code,
+        time.time() + _CODE_TTL,
+    )
+
+
+def _consume_verification_code(*, purpose: str, email: str, code: str) -> str | None:
+    stored = _verification_codes.get(_verification_code_key(purpose=purpose, email=email))
+    if stored is None:
+        return "请先获取验证码"
+    stored_code, expiry = stored
+    if time.time() > expiry:
+        del _verification_codes[_verification_code_key(purpose=purpose, email=email)]
+        return "验证码已过期，请重新获取"
+    if code != stored_code:
+        return "验证码不正确"
+    del _verification_codes[_verification_code_key(purpose=purpose, email=email)]
+    return None
 
 
 def _verify_geetest(settings: Settings, geetest_params: object, logger: Logger) -> str | None:
@@ -118,10 +143,26 @@ def register_auth_routes(
             "geetest_captcha_id": settings.geetest_captcha_id if geetest_enabled else "",
         }
 
+    @app.get("/api/auth/password/config")
+    def password_reset_config():
+        available_email_providers = get_available_email_providers()
+        provider = resolve_email_provider(
+            system_config_store.get_system_config("value.email_provider", ""),
+            available_email_providers,
+        )
+        geetest_enabled = bool(settings.geetest_captcha_id)
+        return {
+            "ok": True,
+            "password_reset_enabled": bool(provider),
+            "geetest_enabled": geetest_enabled,
+            "geetest_captcha_id": settings.geetest_captcha_id if geetest_enabled else "",
+        }
+
     @app.post("/api/auth/register/send-code")
     def register_send_code():
         data = request.get_json(silent=True) or {}
         email = str(data.get("email", "")).strip().lower()
+        geetest_params = data.get("geetest_params")
 
         if not email or "@" not in email:
             return jsonify({"error": "请输入有效的邮箱地址"}), 400
@@ -138,10 +179,14 @@ def register_auth_routes(
         if existing is not None:
             return jsonify({"error": "该邮箱已注册"}), 400
 
+        geetest_error = _verify_geetest(settings, geetest_params, _get_logger())
+        if geetest_error is not None:
+            return jsonify({"error": geetest_error}), 400
+
         _cleanup_expired_codes()
 
         code = f"{secrets.randbelow(1000000):06d}"
-        _verification_codes[email] = (code, time.time() + _CODE_TTL)
+        _store_verification_code(purpose="register", email=email, code=code)
 
         provider = resolve_email_provider(
             system_config_store.get_system_config("value.email_provider", ""),
@@ -183,16 +228,9 @@ def register_auth_routes(
         if email_ver:
             if not code:
                 return jsonify({"error": "请输入邮箱验证码"}), 400
-            stored = _verification_codes.get(email)
-            if stored is None:
-                return jsonify({"error": "请先获取验证码"}), 400
-            stored_code, expiry = stored
-            if time.time() > expiry:
-                del _verification_codes[email]
-                return jsonify({"error": "验证码已过期，请重新获取"}), 400
-            if code != stored_code:
-                return jsonify({"error": "验证码不正确"}), 400
-            del _verification_codes[email]
+            code_error = _consume_verification_code(purpose="register", email=email, code=code)
+            if code_error is not None:
+                return jsonify({"error": code_error}), 400
 
         geetest_error = _verify_geetest(settings, geetest_params, _get_logger())
         if geetest_error is not None:
@@ -230,6 +268,74 @@ def register_auth_routes(
         session["role"] = user.role
         user_store.update_last_login_at(user.id)
         return {"ok": True, "user": user.to_dict()}
+
+    @app.post("/api/auth/password/send-code")
+    def password_send_code():
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email", "")).strip().lower()
+        geetest_params = data.get("geetest_params")
+
+        if not email or "@" not in email:
+            return jsonify({"error": "请输入有效的邮箱地址"}), 400
+
+        available_email_providers = get_available_email_providers()
+        provider = resolve_email_provider(
+            system_config_store.get_system_config("value.email_provider", ""),
+            available_email_providers,
+        )
+        if not provider:
+            return jsonify({"error": "当前未配置找回密码所需的邮件发送方式"}), 403
+
+        geetest_error = _verify_geetest(settings, geetest_params, _get_logger())
+        if geetest_error is not None:
+            return jsonify({"error": geetest_error}), 400
+
+        user = user_store.get_user_by_username(email)
+        if user is None:
+            return jsonify({"error": "该邮箱未注册"}), 400
+
+        _cleanup_expired_codes()
+        code = f"{secrets.randbelow(1000000):06d}"
+        _store_verification_code(purpose="password_reset", email=email, code=code)
+
+        ok, message = send_verification_email(email, code, provider=provider, logger=_get_logger())
+        if not ok:
+            return jsonify({"error": message}), 400
+
+        return {"ok": True, "message": "验证码已发送"}
+
+    @app.post("/api/auth/password/reset")
+    def password_reset():
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email", "")).strip().lower()
+        code = str(data.get("code", "")).strip()
+        password = str(data.get("password", ""))
+
+        if not email or "@" not in email:
+            return jsonify({"error": "请输入有效的邮箱地址"}), 400
+        if not code:
+            return jsonify({"error": "请输入邮箱验证码"}), 400
+        if len(password) < 4:
+            return jsonify({"error": "密码至少需要 4 个字符"}), 400
+
+        available_email_providers = get_available_email_providers()
+        provider = resolve_email_provider(
+            system_config_store.get_system_config("value.email_provider", ""),
+            available_email_providers,
+        )
+        if not provider:
+            return jsonify({"error": "当前未配置找回密码所需的邮件发送方式"}), 403
+
+        user = user_store.get_user_by_username(email)
+        if user is None:
+            return jsonify({"error": "该邮箱未注册"}), 400
+
+        code_error = _consume_verification_code(purpose="password_reset", email=email, code=code)
+        if code_error is not None:
+            return jsonify({"error": code_error}), 400
+
+        user_store.update_user_password(user.id, password)
+        return {"ok": True}
 
     @app.post("/api/auth/logout")
     def logout():

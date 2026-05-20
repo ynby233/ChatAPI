@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 
-from flask import Flask, jsonify, request
+from flask import Flask, current_app, jsonify, request
 
 from ..core import AuthContext
 from ..repositories import UserStore
@@ -15,7 +15,21 @@ def register_user_api_key_routes(app: Flask, *, auth: AuthContext, user_store: U
     def list_api_keys():
         owner_id = auth.owner_id()
         keys = user_store.list_api_keys(owner_id)
-        return {"ok": True, "api_keys": [k.to_dict() for k in keys]}
+        system_config_store = current_app.extensions.get("chat_system_config_store")
+        api_key_limit = 0
+        if system_config_store is not None:
+            try:
+                api_key_limit = max(
+                    0,
+                    int(system_config_store.get_system_config("value.api_key_limit_per_user", "0") or "0"),
+                )
+            except ValueError:
+                api_key_limit = 0
+        return {
+            "ok": True,
+            "api_keys": [k.to_dict() for k in keys],
+            "api_key_limit_per_user": api_key_limit,
+        }
 
     @app.post("/api/user/api-keys")
     @auth.require_session_auth
@@ -25,6 +39,18 @@ def register_user_api_key_routes(app: Flask, *, auth: AuthContext, user_store: U
         custom_key = str(data.get("api_key", "")).strip()
 
         owner_id = auth.owner_id()
+        system_config_store = current_app.extensions.get("chat_system_config_store")
+        api_key_limit = 0
+        if system_config_store is not None:
+            try:
+                api_key_limit = max(
+                    0,
+                    int(system_config_store.get_system_config("value.api_key_limit_per_user", "0") or "0"),
+                )
+            except ValueError:
+                api_key_limit = 0
+        if api_key_limit > 0 and user_store.count_api_keys(owner_id) >= api_key_limit:
+            return jsonify({"error": f"当前账号最多只能创建 {api_key_limit} 个 API Key"}), 400
         try:
             if custom_key:
                 key_obj, raw_key = user_store.create_api_key(owner_id, name, custom_key)

@@ -37,7 +37,7 @@ export function GeetestCaptchaField({ enabled, captchaId, containerId, captchaRe
 
     function initCaptcha() {
       if (!mounted || !window.initGeetest4 || geetestReadyRef.current) return
-      window.initGeetest4({ captchaId, product: 'popup' }, (captcha) => {
+      window.initGeetest4({ captchaId, product: 'float' }, (captcha) => {
         if (!mounted) return
         captchaRef.current = captcha
         geetestReadyRef.current = true

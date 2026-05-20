@@ -4,7 +4,7 @@ import { DeleteOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/i
 
 import { appMessage } from '../../lib/antdApp'
 import { requestJson } from '../../lib/api'
-import type { ApiKeyInfo } from '../../types/chat'
+import type { ApiKeyInfo, ApiKeyListResponse } from '../../types/chat'
 
 type ApiKeyManagementPanelProps = {
   open: boolean
@@ -17,6 +17,7 @@ export function ApiKeyManagementPanel({ open }: ApiKeyManagementPanelProps) {
   const [deletingId, setDeletingId] = useState('')
   const [generating, setGenerating] = useState(false)
   const [apiKeyValue, setApiKeyValue] = useState('')
+  const [apiKeyLimit, setApiKeyLimit] = useState(0)
   const [form] = Form.useForm()
 
   useEffect(() => {
@@ -25,9 +26,10 @@ export function ApiKeyManagementPanel({ open }: ApiKeyManagementPanelProps) {
     async function loadKeys() {
       setLoading(true)
       try {
-        const data = await requestJson<{ ok: boolean; api_keys: ApiKeyInfo[] }>('/api/user/api-keys')
+        const data = await requestJson<ApiKeyListResponse>('/api/user/api-keys')
         if (!active) return
         setApiKeys(data.api_keys)
+        setApiKeyLimit(Number(data.api_key_limit_per_user ?? 0))
       } catch (error) {
         if (!active) return
         appMessage.error(error instanceof Error ? error.message : '加载 API Key 列表失败')
@@ -40,6 +42,10 @@ export function ApiKeyManagementPanel({ open }: ApiKeyManagementPanelProps) {
   }, [open])
 
   async function handleCreate(values: { name: string; api_key: string }) {
+    if (apiKeyLimit > 0 && apiKeys.length >= apiKeyLimit) {
+      appMessage.warning(`当前账号最多只能创建 ${apiKeyLimit} 个 API Key`)
+      return
+    }
     setCreating(true)
     try {
       const data = await requestJson<{ ok: boolean; api_key: ApiKeyInfo }>('/api/user/api-keys', {
@@ -134,9 +140,14 @@ export function ApiKeyManagementPanel({ open }: ApiKeyManagementPanelProps) {
     <div className="api-key-management-panel">
       <div className="api-key-management-header">
         <Typography.Text className="api-key-management-subtitle">
-          管理你的 API Key，用于程序化访问接口。
+          管理你的 API Key，用于程序化访问接口。{apiKeyLimit > 0 ? `已使用 ${apiKeys.length} / ${apiKeyLimit}` : '当前不限制数量。'}
         </Typography.Text>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => form.submit()}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => form.submit()}
+          disabled={apiKeyLimit > 0 && apiKeys.length >= apiKeyLimit}
+        >
           添加 Key
         </Button>
       </div>
