@@ -1,18 +1,50 @@
+import type { MutableRefObject } from 'react'
 import { Button, Card, Form, Input, Typography } from 'antd'
 
 import { CosmicBackdrop } from './CosmicBackdrop'
+import { GeetestCaptchaField, type GeetestCaptcha } from './GeetestCaptchaField'
+import { appMessage } from '../lib/antdApp'
 import type { LoginFormValues } from '../types/chat'
 
 type LoginScreenProps = {
   loading: boolean
   totpEnabled: boolean
   registrationEnabled: boolean
+  geetestEnabled: boolean
+  geetestCaptchaId: string
+  geetestCaptchaRef: MutableRefObject<GeetestCaptcha | null>
   onSubmit: (values: LoginFormValues) => void | Promise<void>
   onNavigateToRegister: () => void
 }
 
-export function LoginScreen({ loading, onSubmit, totpEnabled, registrationEnabled, onNavigateToRegister }: LoginScreenProps) {
+export function LoginScreen({
+  loading,
+  onSubmit,
+  totpEnabled,
+  registrationEnabled,
+  geetestEnabled,
+  geetestCaptchaId,
+  geetestCaptchaRef,
+  onNavigateToRegister,
+}: LoginScreenProps) {
   const [form] = Form.useForm<LoginFormValues>()
+
+  async function handleFinish(values: LoginFormValues) {
+    let geetestParams: LoginFormValues['geetest_params']
+    if (geetestEnabled) {
+      const result = geetestCaptchaRef.current?.getValidate()
+      if (!result) {
+        appMessage.warning('请先完成人机验证')
+        return
+      }
+      geetestParams = result
+    }
+
+    await onSubmit({
+      ...values,
+      geetest_params: geetestParams,
+    })
+  }
 
   return (
     <div className="login-screen">
@@ -28,7 +60,7 @@ export function LoginScreen({ loading, onSubmit, totpEnabled, registrationEnable
         <Form
           form={form}
           layout="vertical"
-          onFinish={(values) => void onSubmit(values)}
+          onFinish={(values) => void handleFinish(values)}
           autoComplete="off"
           className="login-form"
           initialValues={{ username: '', password: '', totp: '' }}
@@ -61,13 +93,22 @@ export function LoginScreen({ loading, onSubmit, totpEnabled, registrationEnable
               />
             </Form.Item>
           ) : null}
+          <GeetestCaptchaField
+            enabled={geetestEnabled}
+            captchaId={geetestCaptchaId}
+            containerId="geetest-login-container"
+            captchaRef={geetestCaptchaRef}
+          />
           <Button type="primary" htmlType="submit" size="large" block loading={loading}>
             登录
           </Button>
           {registrationEnabled ? (
-            <Button block onClick={onNavigateToRegister}>
-              注册账号
-            </Button>
+            <div className="login-register-row">
+              <Typography.Text>没有账号？</Typography.Text>
+              <Typography.Link className="login-register-link" onClick={onNavigateToRegister}>
+                注册
+              </Typography.Link>
+            </div>
           ) : null}
         </Form>
       </Card>

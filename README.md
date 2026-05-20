@@ -106,6 +106,17 @@ CHATAPI_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 # 直接由 Flask 提供 HTTPS 时使用
 # CHATAPI_TLS_CERT_FILE=./certs/server.crt
 # CHATAPI_TLS_KEY_FILE=./certs/server.key
+
+# 邮件发送可选配置：
+# CHATAPI_EMAIL_FROM=noreply@kirari.fun
+# CHATAPI_SMTP_HOST=smtp.example.com
+# CHATAPI_RESEND_API_KEY=re_xxxxxxxxx
+# CHATAPI_BREVO_API_KEY=YOUR_BREVO_API_KEY
+# CHATAPI_TENCENTCLOUD_SECRET_ID=AKIDxxxxxxxxxxxxxxxx
+# CHATAPI_TENCENTCLOUD_SECRET_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# CHATAPI_TENCENTCLOUD_SES_REGION=ap-guangzhou
+# 普通 SES 账号还需要模板 ID；模板数据会由程序动态生成。
+# CHATAPI_TENCENTCLOUD_TEMPLATE_ID=100091
 ```
 
 ## 4. Nginx 反向代理示例

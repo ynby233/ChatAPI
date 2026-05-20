@@ -384,6 +384,7 @@ def build_message_debug_metadata(
             "response_id": response_id or "",
             "model": resolved_model,
             "request_format": request_format,
+            "api_key_name": auth.request_api_key_name(),
             "request_keys": sorted(request_data.keys()),
             "input_text": input_text,
             "input_payload": input_payload,

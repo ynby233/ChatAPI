@@ -30,6 +30,54 @@ def _cleanup_expired_codes() -> None:
         del _verification_codes[email]
 
 
+def _verify_geetest(settings: Settings, geetest_params: object, logger: Logger) -> str | None:
+    if not settings.geetest_captcha_id:
+        return None
+    if not geetest_params or not isinstance(geetest_params, dict):
+        return "请完成人机验证"
+
+    lot_number = str(geetest_params.get("lot_number", ""))
+    captcha_output = str(geetest_params.get("captcha_output", ""))
+    pass_token = str(geetest_params.get("pass_token", ""))
+    gen_time = str(geetest_params.get("gen_time", ""))
+
+    if not all([lot_number, captcha_output, pass_token, gen_time]):
+        return "人机验证参数不完整"
+
+    sign_token = hmac.new(
+        settings.geetest_captcha_key.encode(),
+        lot_number.encode(),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+
+    params = {
+        "lot_number": lot_number,
+        "captcha_output": captcha_output,
+        "pass_token": pass_token,
+        "gen_time": gen_time,
+        "sign_token": sign_token,
+    }
+    api_url = f"{settings.geetest_api_server}/validate?captcha_id={settings.geetest_captcha_id}"
+
+    try:
+        encoded = urllib.parse.urlencode(params).encode()
+        req = urllib.request.Request(api_url, data=encoded, method="POST")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = resp.read().decode()
+        import json as _json
+
+        gt_result = _json.loads(result)
+    except Exception as exc:
+        logger.warning("[GeeTest] validation request failed: %s", exc)
+        gt_result = {"result": "success", "reason": "request geetest api fail"}
+
+    if gt_result.get("result") != "success":
+        return "人机验证失败，请重试"
+
+    return None
+
+
 def register_auth_routes(
     app: Flask,
     *,
@@ -146,48 +194,9 @@ def register_auth_routes(
                 return jsonify({"error": "验证码不正确"}), 400
             del _verification_codes[email]
 
-        # GeeTest verification
-        if settings.geetest_captcha_id:
-            if not geetest_params or not isinstance(geetest_params, dict):
-                return jsonify({"error": "请完成人机验证"}), 400
-
-            lot_number = geetest_params.get("lot_number", "")
-            captcha_output = geetest_params.get("captcha_output", "")
-            pass_token = geetest_params.get("pass_token", "")
-            gen_time = geetest_params.get("gen_time", "")
-
-            if not all([lot_number, captcha_output, pass_token, gen_time]):
-                return jsonify({"error": "人机验证参数不完整"}), 400
-
-            sign_token = hmac.new(
-                settings.geetest_captcha_key.encode(),
-                lot_number.encode(),
-                digestmod=hashlib.sha256,
-            ).hexdigest()
-
-            params = {
-                "lot_number": lot_number,
-                "captcha_output": captcha_output,
-                "pass_token": pass_token,
-                "gen_time": gen_time,
-                "sign_token": sign_token,
-            }
-            api_url = f"{settings.geetest_api_server}/validate?captcha_id={settings.geetest_captcha_id}"
-
-            try:
-                encoded = urllib.parse.urlencode(params).encode()
-                req = urllib.request.Request(api_url, data=encoded, method="POST")
-                req.add_header("Content-Type", "application/x-www-form-urlencoded")
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    result = resp.read().decode()
-                import json as _json
-                gt_result = _json.loads(result)
-            except Exception as exc:
-                _get_logger().warning("[GeeTest] validation request failed: %s", exc)
-                gt_result = {"result": "success", "reason": "request geetest api fail"}
-
-            if gt_result.get("result") != "success":
-                return jsonify({"error": "人机验证失败，请重试"}), 400
+        geetest_error = _verify_geetest(settings, geetest_params, _get_logger())
+        if geetest_error is not None:
+            return jsonify({"error": geetest_error}), 400
 
         user = user_store.create_user(email, password, role="user")
         session["user_id"] = user.id
@@ -202,6 +211,11 @@ def register_auth_routes(
         username = str(data.get("username", "")).strip()
         password = str(data.get("password", ""))
         totp = str(data.get("totp", "")).strip()
+        geetest_params = data.get("geetest_params")
+
+        geetest_error = _verify_geetest(settings, geetest_params, _get_logger())
+        if geetest_error is not None:
+            return jsonify({"error": geetest_error}), 400
 
         user = user_store.verify_user_password(username, password)
         if user is None:
@@ -226,8 +240,15 @@ def register_auth_routes(
     def auth_session():
         user = auth.current_user()
         ext_reg = system_config_store.get_system_config("flag.external_registration", "0") == "1"
+        geetest_enabled = bool(settings.geetest_captcha_id)
         if user is None:
-            return {"authenticated": False, "user": None, "registration_enabled": ext_reg}
+            return {
+                "authenticated": False,
+                "user": None,
+                "registration_enabled": ext_reg,
+                "geetest_enabled": geetest_enabled,
+                "geetest_captcha_id": settings.geetest_captcha_id if geetest_enabled else "",
+            }
 
         db_user = user_store.get_user(user["id"])
         totp_enabled = bool(db_user and db_user.totp_secret)
@@ -236,6 +257,8 @@ def register_auth_routes(
             "user": user,
             "totp_enabled": totp_enabled,
             "registration_enabled": ext_reg,
+            "geetest_enabled": geetest_enabled,
+            "geetest_captcha_id": settings.geetest_captcha_id if geetest_enabled else "",
         }
 
     @app.get("/api/auth/totp/setup")

@@ -28,6 +28,8 @@ export function useChatWorkspace(isMobile: boolean) {
     user: null,
     totp_enabled: false,
     registration_enabled: false,
+    geetest_enabled: false,
+    geetest_captcha_id: '',
   })
   const [loginLoading, setLoginLoading] = useState(false)
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -159,6 +161,8 @@ export function useChatWorkspace(isMobile: boolean) {
         user: null,
         totp_enabled: false,
         registration_enabled: false,
+        geetest_enabled: false,
+        geetest_captcha_id: '',
       })
       setTotpEnabled(false)
       setConversations([])

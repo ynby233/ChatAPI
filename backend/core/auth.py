@@ -50,6 +50,12 @@ class AuthContext:
             return None
         return self.user_store.resolve_api_key_owner(api_key)
 
+    def request_api_key_name(self) -> str:
+        api_key = self.request_api_key()
+        if not api_key or self.user_store is None:
+            return ""
+        return self.user_store.resolve_api_key_name(api_key) or ""
+
     def is_request_authorized_by_api_key(self) -> bool:
         return self.resolve_owner_from_api_key() is not None
 

@@ -318,6 +318,18 @@ class UserStore:
             return None
         return str(row["user_id"])
 
+    def resolve_api_key_name(self, raw_key: str) -> str | None:
+        if not raw_key:
+            return None
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT name FROM user_api_keys WHERE api_key = ?",
+                (raw_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        return str(row["name"])
+
     # --- User config ---
 
     def get_user_config(self, user_id: str, key: str, default: str = "") -> str:

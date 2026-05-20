@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Spin } from 'antd'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
@@ -7,6 +7,7 @@ import { GithubButton } from './components/GithubButton'
 import { HomepageScreen } from './components/HomepageScreen'
 import { LoginScreen } from './components/LoginScreen'
 import { RegistrationScreen } from './components/RegistrationScreen'
+import { type GeetestCaptcha } from './components/GeetestCaptchaField'
 import { StatisticsPage } from './components/StatisticsPage'
 import { ThemeToggle } from './components/ThemeToggle'
 import { WorkspaceRoute } from './components/WorkspaceRoute'
@@ -27,6 +28,7 @@ function LoginRoute() {
   const auth = useAuthSession()
   const [loading, setLoading] = useState(false)
   const [totpRequired, setTotpRequired] = useState(false)
+  const captchaRef = useRef<GeetestCaptcha | null>(null)
 
   async function handleSubmit(values: LoginFormValues) {
     setLoading(true)
@@ -34,6 +36,7 @@ function LoginRoute() {
       await auth.login(values)
       navigate('/app', { replace: true })
     } catch (error) {
+      captchaRef.current?.reset()
       // Check if TOTP is required based on the error response
       if (error instanceof Error && (error as any).responseBody?.totp_required) {
         setTotpRequired(true)
@@ -59,6 +62,9 @@ function LoginRoute() {
       loading={loading}
       totpEnabled={auth.session.totp_enabled || totpRequired}
       registrationEnabled={auth.session.registration_enabled}
+      geetestEnabled={auth.session.geetest_enabled}
+      geetestCaptchaId={auth.session.geetest_captcha_id}
+      geetestCaptchaRef={captchaRef}
       onSubmit={(values) => void handleSubmit(values)}
       onNavigateToRegister={() => navigate('/register')}
     />

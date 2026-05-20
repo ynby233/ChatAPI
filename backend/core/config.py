@@ -76,6 +76,10 @@ class Settings:
     resend_api_key: str
     brevo_api_key: str
     brevo_from_name: str
+    tencentcloud_secret_id: str
+    tencentcloud_secret_key: str
+    tencentcloud_ses_region: str
+    tencentcloud_template_id: str
     geetest_captcha_id: str
     geetest_captcha_key: str
     geetest_api_server: str
@@ -145,6 +149,26 @@ class Settings:
             resend_api_key=_first_non_empty("CHATAPI_RESEND_API_KEY", "RESEND_API_KEY", default=""),
             brevo_api_key=_first_non_empty("CHATAPI_BREVO_API_KEY", "BREVO_API_KEY", default=""),
             brevo_from_name=_first_non_empty("CHATAPI_BREVO_FROM_NAME", "BREVO_FROM_NAME", default="ChatAPI"),
+            tencentcloud_secret_id=_first_non_empty(
+                "CHATAPI_TENCENTCLOUD_SECRET_ID",
+                "TENCENTCLOUD_SECRET_ID",
+                default="",
+            ),
+            tencentcloud_secret_key=_first_non_empty(
+                "CHATAPI_TENCENTCLOUD_SECRET_KEY",
+                "TENCENTCLOUD_SECRET_KEY",
+                default="",
+            ),
+            tencentcloud_ses_region=_first_non_empty(
+                "CHATAPI_TENCENTCLOUD_SES_REGION",
+                "TENCENTCLOUD_SES_REGION",
+                default="ap-guangzhou",
+            ),
+            tencentcloud_template_id=_first_non_empty(
+                "CHATAPI_TENCENTCLOUD_TEMPLATE_ID",
+                "TENCENTCLOUD_TEMPLATE_ID",
+                default="",
+            ),
             geetest_captcha_id=_first_non_empty("CHATAPI_GEETEST_CAPTCHA_ID", "GEETEST_CAPTCHA_ID", default=""),
             geetest_captcha_key=_first_non_empty("CHATAPI_GEETEST_CAPTCHA_KEY", "GEETEST_CAPTCHA_KEY", default=""),
             geetest_api_server=_first_non_empty("CHATAPI_GEETEST_API_SERVER", "GEETEST_API_SERVER", default="http://gcaptcha4.geetest.com"),

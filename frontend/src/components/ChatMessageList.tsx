@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { App, Avatar, Button, Empty, Spin } from 'antd'
 import { CopyOutlined, UserOutlined } from '@ant-design/icons'
@@ -16,6 +16,84 @@ type ChatMessageListProps = {
   sending: boolean
   isWaitingForUser: boolean
   visibleMessages: VisibleMessage[]
+}
+
+const DISCLOSURE_ANIMATION_MS = 150
+
+function AnimatedDisclosure({
+  children,
+  className = '',
+  title,
+}: {
+  children: ReactNode
+  className?: string
+  title: string
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const openFrameRef = useRef<number | null>(null)
+  const closeTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (openFrameRef.current !== null) {
+        window.cancelAnimationFrame(openFrameRef.current)
+      }
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current)
+      }
+    }
+  }, [])
+
+  const handleToggle = () => {
+    if (expanded) {
+      setExpanded(false)
+      if (openFrameRef.current !== null) {
+        window.cancelAnimationFrame(openFrameRef.current)
+        openFrameRef.current = null
+      }
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current)
+      }
+      closeTimerRef.current = window.setTimeout(() => {
+        closeTimerRef.current = null
+        setMounted(false)
+      }, DISCLOSURE_ANIMATION_MS)
+      return
+    }
+
+    setMounted(true)
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+    if (openFrameRef.current !== null) {
+      window.cancelAnimationFrame(openFrameRef.current)
+    }
+    openFrameRef.current = window.requestAnimationFrame(() => {
+      openFrameRef.current = null
+      setExpanded(true)
+    })
+  }
+
+  return (
+    <div className={`message-debug-card ${className} ${expanded ? 'is-open' : 'is-closed'}`}>
+      <button
+        aria-expanded={expanded}
+        className="message-debug-summary"
+        type="button"
+        onClick={handleToggle}
+      >
+        <span>{title}</span>
+        <span className="message-debug-summary-state">{expanded ? '折叠' : '展开'}</span>
+      </button>
+      {mounted && (
+        <div className="message-debug-body">
+          <div className="message-debug-body-inner">{children}</div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function ChatMessageList({
@@ -86,6 +164,7 @@ export function ChatMessageList({
             label: '请求格式',
             value: requestDebug?.request_format || item.metadata?.request_format || '',
           },
+          { label: 'api-key', value: requestDebug?.api_key_name || '-' },
           { label: '模型', value: requestDebug?.model || item.metadata?.model || '' },
           { label: '请求 ID', value: requestDebug?.request_id || '' },
           { label: '响应 ID', value: requestDebug?.response_id || item.response_id || '' },
@@ -129,10 +208,10 @@ export function ChatMessageList({
                     ? 'tool-input'
                     : isToolCall
                       ? 'tool-call'
-                      : isToolResult
-                        ? 'tool-result'
-                        : 'assistant'
-              } ${isDraft ? 'draft' : ''}`}
+                    : isToolResult
+                      ? 'tool-result'
+                      : 'assistant'
+              } ${hasDebugCard ? 'has-debug' : ''} ${isDraft ? 'draft' : ''}`}
             >
               {isToolCall && <div className="message-kind-badge">Tool Call</div>}
               {isToolResult && <div className="message-kind-badge tool-result">Tool Result</div>}
@@ -160,66 +239,69 @@ export function ChatMessageList({
                 </div>
               )}
               {hasDebugCard && (
-                <details className="message-debug-card">
-                  <summary>请求详情</summary>
-                  <div className="message-debug-body">
-                    {debugSections.map((section) => (
-                      <div key={section.label} className="message-debug-row">
-                        <span className="message-debug-label">{section.label}</span>
-                        <span className="message-debug-value">{section.value}</span>
-                      </div>
-                    ))}
-                    {requestDebug?.tool_schemas?.length ? (
-                      <div className="message-debug-block">
-                        <div className="message-debug-label">Tool Schemas</div>
-                        <pre>{formatJson(requestDebug.tool_schemas)}</pre>
-                      </div>
-                    ) : null}
-                    {requestDebug?.input_payload != null ? (
-                      <div className="message-debug-block">
-                        <div className="message-debug-label">Input Payload</div>
-                        <pre>{formatJson(requestDebug.input_payload)}</pre>
-                      </div>
-                    ) : null}
-                    {requestDebug?.request_body != null ? (
-                      <div className="message-debug-block">
-                        <div className="message-debug-label-row">
-                          <span className="message-debug-label">Request Body</span>
-                          <Button
-                            size="small"
-                            type="link"
-                            icon={<CopyOutlined />}
-                            className="copy-curl-btn"
-                            onClick={() => {
-                              const curl = buildCurlCommand(requestDebug.request_body)
-                              if (!curl) return
-                              if (navigator.clipboard && window.isSecureContext) {
-                                navigator.clipboard.writeText(curl).then(() => {
-                                  antMessage.success('已复制 curl')
-                                }).catch(() => {
-                                  antMessage.error('复制失败')
-                                })
-                              } else {
-                                const textarea = document.createElement('textarea')
-                                textarea.value = curl
-                                textarea.style.position = 'fixed'
-                                textarea.style.opacity = '0'
-                                document.body.appendChild(textarea)
-                                textarea.select()
-                                document.execCommand('copy')
-                                document.body.removeChild(textarea)
-                                antMessage.success('已复制 curl')
-                              }
-                            }}
-                          >
-                            复制 curl
-                          </Button>
+                <AnimatedDisclosure title="请求详情">
+                  {debugSections.map((section) => (
+                    <div key={section.label} className="message-debug-row">
+                      <span className="message-debug-label">{section.label}</span>
+                      <span className="message-debug-value">{section.value}</span>
+                    </div>
+                  ))}
+                  {(requestDebug?.tool_schemas?.length ||
+                    requestDebug?.input_payload != null ||
+                    requestDebug?.request_body != null) && (
+                    <AnimatedDisclosure className="message-debug-subcard" title="Debug信息">
+                      {requestDebug?.tool_schemas?.length ? (
+                        <div className="message-debug-block">
+                          <div className="message-debug-label">Tool Schemas</div>
+                          <pre>{formatJson(requestDebug.tool_schemas)}</pre>
                         </div>
-                        <pre>{formatJson(requestDebug.request_body)}</pre>
-                      </div>
-                    ) : null}
-                  </div>
-                </details>
+                      ) : null}
+                      {requestDebug?.input_payload != null ? (
+                        <div className="message-debug-block">
+                          <div className="message-debug-label">Input Payload</div>
+                          <pre>{formatJson(requestDebug.input_payload)}</pre>
+                        </div>
+                      ) : null}
+                      {requestDebug?.request_body != null ? (
+                        <div className="message-debug-block">
+                          <div className="message-debug-label-row">
+                            <span className="message-debug-label">Request Body</span>
+                            <Button
+                              size="small"
+                              type="link"
+                              icon={<CopyOutlined />}
+                              className="copy-curl-btn"
+                              onClick={() => {
+                                const curl = buildCurlCommand(requestDebug.request_body)
+                                if (!curl) return
+                                if (navigator.clipboard && window.isSecureContext) {
+                                  navigator.clipboard.writeText(curl).then(() => {
+                                    antMessage.success('已复制 curl')
+                                  }).catch(() => {
+                                    antMessage.error('复制失败')
+                                  })
+                                } else {
+                                  const textarea = document.createElement('textarea')
+                                  textarea.value = curl
+                                  textarea.style.position = 'fixed'
+                                  textarea.style.opacity = '0'
+                                  document.body.appendChild(textarea)
+                                  textarea.select()
+                                  document.execCommand('copy')
+                                  document.body.removeChild(textarea)
+                                  antMessage.success('已复制 curl')
+                                }
+                              }}
+                            >
+                              复制 curl
+                            </Button>
+                          </div>
+                          <pre>{formatJson(requestDebug.request_body)}</pre>
+                        </div>
+                      ) : null}
+                    </AnimatedDisclosure>
+                  )}
+                </AnimatedDisclosure>
               )}
               <div className="message-meta">
                 <span>

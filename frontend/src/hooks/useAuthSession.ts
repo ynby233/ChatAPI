@@ -9,6 +9,8 @@ const DEFAULT_SESSION: AuthSession = {
   user: null,
   totp_enabled: false,
   registration_enabled: false,
+  geetest_enabled: false,
+  geetest_captcha_id: '',
 }
 
 export function useAuthSession() {

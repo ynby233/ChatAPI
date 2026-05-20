@@ -320,7 +320,7 @@ export function SystemSettingsPanel({ open, onClose }: SystemSettingsPanelProps)
                 />
               ) : (
                 <Typography.Text type="secondary">
-                  当前未检测到可用的邮箱提供商，请先配置 SMTP 或 Resend API Key。
+                  当前未检测到可用的邮箱提供商，请先配置 SMTP、Resend、Brevo 或腾讯云 SES 凭证和模板 ID。
                 </Typography.Text>
               )}
             </div>

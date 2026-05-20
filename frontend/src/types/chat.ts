@@ -9,6 +9,8 @@ export type AuthSession = {
   user: AuthUser | null
   totp_enabled: boolean
   registration_enabled: boolean
+  geetest_enabled: boolean
+  geetest_captcha_id: string
 }
 
 export type User = {
@@ -76,6 +78,7 @@ export type MessageItem = {
       response_id?: string
       model?: string
       request_format?: 'responses' | 'chat_completions' | 'anthropic_messages' | string
+      api_key_name?: string
       request_keys?: string[]
       input_text?: string
       input_payload?: unknown
@@ -120,10 +123,17 @@ export type ToolSchemaOption = {
 export type ToolFieldValue = string | number | boolean
 export type ComposerMode = 'assistant_message' | 'tool_call'
 export type VisibleMessage = MessageItem & { draft?: boolean }
+export type GeetestValidationResult = {
+  lot_number: string
+  captcha_output: string
+  pass_token: string
+  gen_time: string
+}
 export type LoginFormValues = {
   username: string
   password: string
   totp?: string
+  geetest_params?: GeetestValidationResult
 }
 
 export type AutomationRuleCondition = {

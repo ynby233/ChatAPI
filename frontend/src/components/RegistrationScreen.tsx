@@ -2,31 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Card, Form, Input, Typography } from 'antd'
 
 import { CosmicBackdrop } from './CosmicBackdrop'
+import { GeetestCaptchaField, type GeetestCaptcha } from './GeetestCaptchaField'
 import { appMessage } from '../lib/antdApp'
 import { requestJson } from '../lib/api'
-import type { RegisterConfig } from '../types/chat'
+import type { GeetestValidationResult, RegisterConfig } from '../types/chat'
 
 type RegistrationScreenProps = {
   onRegistered: () => void | Promise<void>
   onBackToLogin: () => void
-}
-
-declare global {
-  interface Window {
-    initGeetest4?: (config: { captchaId: string; product: string }, callback: (captcha: GeetestCaptcha) => void) => void
-  }
-}
-
-type GeetestCaptcha = {
-  appendTo: (selector: string) => void
-  getValidate: () => {
-    lot_number: string
-    captcha_output: string
-    pass_token: string
-    gen_time: string
-  } | false
-  reset: () => void
-  showBox: () => void
 }
 
 export function RegistrationScreen({ onRegistered, onBackToLogin }: RegistrationScreenProps) {
@@ -36,8 +19,6 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
   const [sendingCode, setSendingCode] = useState(false)
   const [codeCountdown, setCodeCountdown] = useState(0)
   const captchaRef = useRef<GeetestCaptcha | null>(null)
-  const geetestReadyRef = useRef(false)
-  const geetestContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let active = true
@@ -68,45 +49,6 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
     void load()
     return () => { active = false }
   }, [])
-
-  useEffect(() => {
-    if (!config?.geetest_enabled || !config.geetest_captcha_id) return
-    if (geetestReadyRef.current) return
-
-    let mounted = true
-    const captchaId = config.geetest_captcha_id
-
-    function initCaptcha() {
-      if (!mounted || !window.initGeetest4 || geetestReadyRef.current) return
-      window.initGeetest4({ captchaId, product: 'popup' }, (captcha) => {
-        if (!mounted) return
-        captchaRef.current = captcha
-        geetestReadyRef.current = true
-        captcha.appendTo('#geetest-register-container')
-      })
-    }
-
-    if (window.initGeetest4) {
-      initCaptcha()
-      return () => { mounted = false }
-    }
-
-    const existing = document.querySelector('script[src*="geetest"]')
-    if (existing) {
-      existing.addEventListener('load', initCaptcha)
-      return () => {
-        mounted = false
-        existing.removeEventListener('load', initCaptcha)
-      }
-    }
-
-    const script = document.createElement('script')
-    script.src = 'https://static.geetest.com/v4/gt4.js'
-    script.onload = initCaptcha
-    document.head.appendChild(script)
-
-    return () => { mounted = false }
-  }, [config?.geetest_enabled, config?.geetest_captcha_id])
 
   useEffect(() => {
     if (codeCountdown <= 0) return
@@ -145,7 +87,7 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
 
       setLoading(true)
 
-      let geetestParams: Record<string, string> | undefined
+      let geetestParams: GeetestValidationResult | undefined
       if (config?.geetest_enabled && captchaRef.current) {
         const result = captchaRef.current.getValidate()
         if (!result) {
@@ -153,7 +95,7 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
           setLoading(false)
           return
         }
-        geetestParams = result as unknown as Record<string, string>
+        geetestParams = result
       }
 
       await requestJson<{ ok: boolean; user?: unknown }>('/api/auth/register', {
@@ -201,9 +143,12 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
               当前系统未开放外部注册，请联系管理员开通。
             </Typography.Paragraph>
           </div>
-          <Button block onClick={onBackToLogin}>
-            返回登录
-          </Button>
+          <div className="login-register-row">
+            <Typography.Text>已有账号？</Typography.Text>
+            <Typography.Link className="login-register-link" onClick={onBackToLogin}>
+              登录
+            </Typography.Link>
+          </div>
         </Card>
       </div>
     )
@@ -268,6 +213,12 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
           >
             <Input.Password placeholder="再次输入密码" size="large" />
           </Form.Item>
+          <GeetestCaptchaField
+            enabled={config.geetest_enabled}
+            captchaId={config.geetest_captcha_id}
+            containerId="geetest-register-container"
+            captchaRef={captchaRef}
+          />
           {config.email_verification_enabled ? (
             <Form.Item
               label="验证码"
@@ -294,17 +245,15 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
               />
             </Form.Item>
           ) : null}
-          {config.geetest_enabled ? (
-            <Form.Item label="人机验证">
-              <div ref={geetestContainerRef} id="geetest-register-container" />
-            </Form.Item>
-          ) : null}
           <Button type="primary" htmlType="submit" size="large" block loading={loading}>
             注册
           </Button>
-          <Button block onClick={onBackToLogin}>
-            返回登录
-          </Button>
+          <div className="login-register-row">
+            <Typography.Text>已有账号？</Typography.Text>
+            <Typography.Link className="login-register-link" onClick={onBackToLogin}>
+              登录
+            </Typography.Link>
+          </div>
         </Form>
       </Card>
     </div>

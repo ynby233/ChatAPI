@@ -15,6 +15,7 @@ dependencies = [
     { name = "qrcode" },
     { name = "resend" },
     { name = "sib-api-v3-sdk" },
+    { name = "tencentcloud-sdk-python" },
 ]
 
 [package.metadata]
@@ -27,6 +28,7 @@ requires-dist = [
     { name = "qrcode", specifier = ">=7.4" },
     { name = "resend", specifier = ">=2.0.0" },
     { name = "sib-api-v3-sdk", specifier = ">=7.6.0" },
+    { name = "tencentcloud-sdk-python", specifier = ">=3.0.0" },
 ]
 
 [[package]]
@@ -447,6 +449,18 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274" },
+]
+
+[[package]]
+name = "tencentcloud-sdk-python"
+version = "3.1.99"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/3a/df/c6a36e1d45ca690957984c4f8789ab9649ad49040e66b179a517db58a07a/tencentcloud_sdk_python-3.1.99.tar.gz", hash = "sha256:ea53e29552719a6fa76cbbbc5827146ed5f7fa7c54f3cc7c29b13754266105bb" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/38/e2/a2101ec62b640d7d4068383e76f8f17cb815aadae580070384c7f2481168/tencentcloud_sdk_python-3.1.99-py2.py3-none-any.whl", hash = "sha256:fe59056b06e912dfda4e3c4b4cd7858f3436cb3b604571065be299b6e12d0e90" },
 ]
 
 [[package]]
