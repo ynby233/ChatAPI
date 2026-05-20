@@ -223,18 +223,18 @@ def register_auth_routes(
         if existing is not None:
             return jsonify({"error": "该邮箱已注册"}), 400
 
-        # Email verification check
         email_ver = system_config_store.get_system_config("flag.email_verification", "0") == "1"
+        if not email_ver:
+            geetest_error = _verify_geetest(settings, geetest_params, _get_logger())
+            if geetest_error is not None:
+                return jsonify({"error": geetest_error}), 400
+
         if email_ver:
             if not code:
                 return jsonify({"error": "请输入邮箱验证码"}), 400
             code_error = _consume_verification_code(purpose="register", email=email, code=code)
             if code_error is not None:
                 return jsonify({"error": code_error}), 400
-
-        geetest_error = _verify_geetest(settings, geetest_params, _get_logger())
-        if geetest_error is not None:
-            return jsonify({"error": geetest_error}), 400
 
         user = user_store.create_user(email, password, role="user")
         session["user_id"] = user.id

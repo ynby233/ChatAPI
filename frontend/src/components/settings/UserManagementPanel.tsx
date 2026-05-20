@@ -5,6 +5,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Space,
   Table,
   Tag,
@@ -132,17 +133,6 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
     setPwModalOpen(true)
   }
 
-  function openDeleteConfirm(user: User) {
-    Modal.confirm({
-      title: `删除用户：${user.username}`,
-      content: '删除后该用户的所有会话、消息和 API Key 都会被清理，且无法恢复。',
-      okText: '删除',
-      cancelText: '取消',
-      okButtonProps: { danger: true },
-      onOk: () => handleDelete(user.id),
-    })
-  }
-
   function openDetailModal(user: User) {
     setDetailUser(user)
     setHistoryMessages([])
@@ -207,15 +197,23 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
           >
             重置密码
           </Button>
-          <Button
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            loading={deletingId === record.id}
-            onClick={() => openDeleteConfirm(record)}
+          <Popconfirm
+            title={`删除用户：${record.username}`}
+            description="删除后该用户的所有会话、消息和 API Key 都会被清理，且无法恢复。"
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => handleDelete(record.id)}
           >
-            删除
-          </Button>
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deletingId === record.id}
+            >
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -361,14 +359,22 @@ export function UserManagementPanel({ open }: UserManagementPanelProps) {
             >
               重置密码
             </Button>
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              loading={detailUser ? deletingId === detailUser.id : false}
-              onClick={() => detailUser && openDeleteConfirm(detailUser)}
+            <Popconfirm
+              title={`删除用户：${detailUser?.username ?? ''}`}
+              description="删除后该用户的所有会话、消息和 API Key 都会被清理，且无法恢复。"
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => detailUser && handleDelete(detailUser.id)}
             >
-              删除用户
-            </Button>
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                loading={detailUser ? deletingId === detailUser.id : false}
+              >
+                删除用户
+              </Button>
+            </Popconfirm>
           </div>
 
           <Table

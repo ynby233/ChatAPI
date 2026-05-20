@@ -98,7 +98,7 @@ export function RegistrationScreen({ onRegistered, onBackToLogin }: Registration
       setLoading(true)
 
       let geetestParams: GeetestValidationResult | undefined
-      if (config?.geetest_enabled && captchaRef.current) {
+      if (config?.geetest_enabled && !config?.email_verification_enabled && captchaRef.current) {
         const result = captchaRef.current.getValidate()
         if (!result) {
           appMessage.warning('请先完成人机验证')
