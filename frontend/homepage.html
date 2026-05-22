@@ -379,7 +379,7 @@
 
       <div class="api-panel">
         <div class="url-bar">
-          <span class="url-base">https://api.kirari.fun</span>
+          <span class="url-base" id="urlBase">https://api.kirari.fun</span>
           <div class="url-switch-zone">
             <div class="url-path-window" id="pathWindow">
               <span class="url-path">/messages</span>
@@ -417,6 +417,13 @@
   </main>
 
   <script>
+    const urlBase = document.getElementById('urlBase');
+    const copyButton = document.querySelector('.copy-btn');
+    const currentOrigin = window.parent?.location?.origin || window.location.origin;
+    if (urlBase) {
+      urlBase.textContent = currentOrigin;
+    }
+
     /**
      * 1. 动态路径高级切换逻辑
      */
@@ -464,6 +471,20 @@
 
     // 每 3.5 秒平滑切换一次
     setInterval(switchApiPath, 3500);
+
+    copyButton?.addEventListener('click', async () => {
+      const currentPath = pathWindow.querySelector('.url-path')?.textContent || '/messages';
+      const url = `${currentOrigin}${currentPath}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        copyButton.title = '已复制';
+        setTimeout(() => {
+          copyButton.title = '复制链接';
+        }, 1200);
+      } catch {
+        copyButton.title = url;
+      }
+    });
 
 
     /**
