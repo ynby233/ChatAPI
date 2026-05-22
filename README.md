@@ -85,6 +85,14 @@ CHATAPI_PASSWORD=change-me
 # CHATAPI_SESSION_SECRET=change-this-session-secret
 ```
 
+如果部署配置保存在项目目录之外，可以设置外部 env 文件路径：
+
+```env
+CHATAPI_ENV_FILE=/path/to/chatapi.env
+```
+
+外部 env 文件与项目内 `.env` 使用相同格式，已存在的进程环境变量不会被文件中的值覆盖。
+
 建议同时确认以下配置：
 
 ```env

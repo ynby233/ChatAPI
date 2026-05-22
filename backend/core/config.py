@@ -31,6 +31,9 @@ def _load_env_files() -> None:
         _repo_root() / ".env",
         _repo_root() / "backend" / ".env",
     ]
+    external_env_file = os.environ.get("CHATAPI_ENV_FILE", "").strip()
+    if external_env_file:
+        candidates.append(Path(external_env_file).expanduser())
     merged: dict[str, str] = {}
     for candidate in candidates:
         merged.update(_parse_env_file(candidate))
