@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Flask, jsonify, request
 
-from ..core import AppDependencies
+from ..core import AppDependencies, settings
 from ..services.email import get_available_email_providers, resolve_email_provider
 from ..services.response_stream import (
     client_disconnected,
@@ -86,6 +86,18 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
     def responses():
         data = request.get_json(silent=True) or {}
         return handle_protocol_request(data, "responses")
+
+    @app.get("/models")
+    @app.get("/v1/models")
+    @auth.require_auth
+    def models():
+        return jsonify({
+            "object": "list",
+            "data": [
+                {"id": model, "object": "model", "owned_by": "chatapi"}
+                for model in settings.openai_models
+            ],
+        })
 
     @app.post("/chat/completions")
     @app.post("/v1/chat/completions")

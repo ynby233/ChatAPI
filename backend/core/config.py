@@ -62,6 +62,7 @@ class Settings:
     db_path: Path
     uploads_img_dir: Path
     cors_origins: list[str]
+    openai_models: list[str]
     host: str
     port: int
     debug: bool
@@ -136,6 +137,7 @@ class Settings:
             db_path=db_path,
             uploads_img_dir=uploads_img_dir,
             cors_origins=_split_csv(cors_raw),
+            openai_models=_split_csv(_first_non_empty("CHATAPI_MODELS", default="human")),
             host=_first_non_empty("CHATAPI_HOST", "BACKEND_HOST", default="0.0.0.0"),
             port=int(_first_non_empty("CHATAPI_PORT", "BACKEND_PORT", default="5000")),
             debug=_first_non_empty("CHATAPI_DEBUG", "FLASK_DEBUG", default="0") == "1",

@@ -93,6 +93,8 @@ CHATAPI_DATA_DIR=./data
 CHATAPI_HOST=0.0.0.0
 CHATAPI_PORT=5000
 CHATAPI_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+# 可选；OpenAI 兼容模型列表接口返回的模型名
+# CHATAPI_MODELS=human
 ```
 
 登录后可以在「系统设置」里启用并保存 `API Key`、站点标题、ntfy 地址、消息限流和 TOTP，这些不再需要放在 `.env` 里。
