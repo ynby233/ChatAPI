@@ -32,7 +32,10 @@ Recommended optional values:
 ```env
 CHATAPI_SESSION_SECRET=replace-with-a-long-random-string
 CHATAPI_CORS_ORIGINS=https://your-domain.example
+CHATAPI_MODELS=human
 ```
+
+`CHATAPI_MODELS` controls the model IDs returned by the OpenAI-compatible `/v1/models` endpoint. Use comma-separated values if you want multiple visible models, for example `human,gpt-human`.
 
 The image already sets these defaults:
 

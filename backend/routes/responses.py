@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import time
+
 from flask import Flask, jsonify, request
 
 from ..core import AppDependencies
@@ -31,6 +34,38 @@ def register_response_routes(app: Flask, *, deps: AppDependencies) -> None:
         logger=app.logger,
         publish_sync=publish_sync,
     )
+
+    def list_openai_models():
+        raw_models = (
+            os.getenv("CHATAPI_MODELS", "")
+            or os.getenv("CHATAPI_MODEL_IDS", "")
+            or os.getenv("CHATAPI_MODEL_ID", "human")
+        )
+        model_names = [name.strip() for name in raw_models.split(",") if name.strip()] or ["human"]
+        try:
+            created = int(os.getenv("CHATAPI_MODEL_CREATED", str(int(time.time()))))
+        except ValueError:
+            created = int(time.time())
+        return jsonify(
+            {
+                "object": "list",
+                "data": [
+                    {
+                        "id": model_name,
+                        "object": "model",
+                        "created": created,
+                        "owned_by": "chatapi",
+                    }
+                    for model_name in model_names
+                ],
+            }
+        )
+
+    @app.get("/models")
+    @app.get("/v1/models")
+    @auth.require_auth
+    def models():
+        return list_openai_models()
 
     def handle_protocol_request(data: dict[str, object], request_format: str):
         prepared = coordinator.prepare_pending_turn(data, request_format)
