@@ -123,13 +123,13 @@ class TurnCoordinator:
         if not isinstance(data, dict):
             return build_openai_error("request body must be a JSON object")
 
-        normalized_data = self._deps.image_store.normalize_request_data(data)
+        owner = self.auth.owner_id()
+        normalized_data = self._deps.image_store.normalize_request_data(data, owner_id=owner)
         context_text = extract_context_text(normalized_data, request_format)
         if not context_text:
             return build_openai_error("input is required")
 
         model = str(normalized_data.get("model") or "mock-gpt-4.1-mini")
-        owner = self.auth.owner_id()
         rate_limit = self.user_store.get_effective_messages_per_minute_limit(owner, 0)
         if not self.message_rate_limiter.allow(owner, rate_limit):
             return build_openai_error(

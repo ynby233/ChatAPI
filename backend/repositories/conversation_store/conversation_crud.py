@@ -97,6 +97,28 @@ class ConversationCrudMixin:
             ).fetchall()
         return [self._row_to_conversation(row) for row in rows]
 
+    def list_conversations_all(self) -> list[Conversation]:
+        with self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    c.*,
+                    COUNT(m.id) AS message_count,
+                    COALESCE((
+                        SELECT substr(m2.content, 1, 120)
+                        FROM messages m2
+                        WHERE m2.conversation_id = c.id
+                        ORDER BY datetime(m2.created_at) DESC
+                        LIMIT 1
+                    ), '') AS last_message_preview
+                FROM conversations c
+                LEFT JOIN messages m ON m.conversation_id = c.id
+                GROUP BY c.id
+                ORDER BY datetime(c.updated_at) DESC
+                """
+            ).fetchall()
+        return [self._row_to_conversation(row) for row in rows]
+
     def delete_conversation(self, conversation_id: str, owner_id: str) -> None:
         if self.get_conversation(conversation_id, owner_id) is None:
             raise ValueError("conversation not found")

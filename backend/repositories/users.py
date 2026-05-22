@@ -155,6 +155,23 @@ class UserStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS uploaded_images (
+                    filename TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    mime_type TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(owner_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_uploaded_images_owner_id
+                ON uploaded_images(owner_id, created_at DESC)
+                """
+            )
     # --- User CRUD ---
 
     def create_user(self, username: str, password: str, role: str = "user") -> User:
@@ -339,6 +356,38 @@ class UserStore:
         if row is None:
             return None
         return str(row["name"])
+
+    # --- Uploaded image ownership ---
+
+    def set_uploaded_image_owner(self, filename: str, owner_id: str, mime_type: str = "") -> None:
+        clean_filename = str(filename).strip()
+        clean_owner_id = str(owner_id).strip()
+        if not clean_filename or not clean_owner_id:
+            return
+        with self._connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO uploaded_images (filename, owner_id, mime_type, created_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(filename) DO UPDATE SET
+                    owner_id = excluded.owner_id,
+                    mime_type = excluded.mime_type
+                """,
+                (clean_filename, clean_owner_id, str(mime_type).strip(), utc_now_iso()),
+            )
+
+    def get_uploaded_image_owner(self, filename: str) -> str | None:
+        clean_filename = str(filename).strip()
+        if not clean_filename:
+            return None
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT owner_id FROM uploaded_images WHERE filename = ?",
+                (clean_filename,),
+            ).fetchone()
+        if row is None:
+            return None
+        return str(row["owner_id"])
 
     # --- User config ---
 

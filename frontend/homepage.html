@@ -36,6 +36,30 @@
       z-index: 1;
     }
 
+    .bottom-link {
+      position: absolute;
+      left: 50%;
+      bottom: calc(env(safe-area-inset-bottom) + 14px);
+      transform: translateX(-50%);
+      z-index: 4;
+      color: rgba(255, 255, 255, 0.34);
+      font-size: 0.75rem;
+      line-height: 1;
+      text-decoration: none;
+      letter-spacing: 0.2px;
+      transition: color 0.2s ease;
+      user-select: none;
+    }
+
+    .bottom-link:hover {
+      color: rgba(255, 255, 255, 0.58);
+    }
+
+    .bottom-link:focus-visible {
+      color: rgba(255, 255, 255, 0.58);
+      outline: none;
+    }
+
     /* 动态粒子画布层 */
     #particleCanvas {
       position: absolute;
@@ -364,6 +388,11 @@
         font-size: 0.82rem;
         letter-spacing: 0.5px;
       }
+
+      .bottom-link {
+        bottom: calc(env(safe-area-inset-bottom) + 10px);
+        font-size: 0.7rem;
+      }
     }
   </style>
 </head>
@@ -414,6 +443,7 @@
         </div>
       </div>
     </div>
+
   </main>
 
   <script>

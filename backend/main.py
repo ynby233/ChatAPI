@@ -1,3 +1,6 @@
+import gc
+gc.set_threshold(300,5,3)
+
 from pathlib import Path
 import sys
 

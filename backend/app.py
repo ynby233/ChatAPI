@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from flask import Flask, abort, send_from_directory
 from flask_cors import CORS
 
@@ -46,7 +48,11 @@ def create_app() -> Flask:
     auth = AuthContext(store, user_store)
     pending_turns = PendingTurnRegistry()
     message_rate_limiter = MessageRateLimiter()
-    image_store = ImageAssetStore(settings.uploads_img_dir, system_config_store=system_config_store)
+    image_store = ImageAssetStore(
+        settings.uploads_img_dir,
+        system_config_store=system_config_store,
+        user_store=user_store,
+    )
     realtime = RealtimeBroker(store, user_store)
     deps = AppDependencies(
         settings=settings,
@@ -64,7 +70,18 @@ def create_app() -> Flask:
     app.extensions["chat_realtime"] = realtime
     app.extensions["chat_image_store"] = image_store
 
-    image_store.cleanup_orphans(store.iter_messages())
+    messages = store.iter_messages()
+    owner_lookup = {conversation.id: conversation.owner_id for conversation in store.list_conversations_all()}
+    image_store.backfill_owners_from_messages(messages, owner_lookup)
+    image_store.cleanup_orphans(messages)
+
+    @app.after_request
+    def apply_security_headers(response):
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        return response
 
     @app.get("/api/health")
     def health():

@@ -9,9 +9,21 @@ from pathlib import Path
 from typing import Any
 
 from ..repositories import SystemConfigStore
+from ..repositories.users import UserStore
 
 
 _DATA_IMAGE_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.+)$", re.IGNORECASE | re.DOTALL)
+_UPLOAD_URL_RE = re.compile(r"/api/uploads/imgs/([A-Za-z0-9._-]+)(?:\?.*)?$", re.IGNORECASE)
+ALLOWED_IMAGE_MIME_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/gif",
+    "image/webp",
+    "image/avif",
+    "image/bmp",
+    "image/tiff",
+}
 
 
 def _normalize_key(value: str) -> str:
@@ -28,7 +40,6 @@ def _mime_to_extension(mime_type: str) -> str:
         "image/webp": "webp",
         "image/avif": "avif",
         "image/bmp": "bmp",
-        "image/svg+xml": "svg",
         "image/tiff": "tiff",
     }
     return mapping.get(normalized, normalized.rsplit("/", 1)[-1] or "img")
@@ -48,7 +59,7 @@ def _mime_from_magic(image_bytes: bytes) -> str | None:
     if image_bytes.startswith(b"\x00\x00\x00") and b"ftypavif" in image_bytes[:32]:
         return "image/avif"
     if image_bytes.lstrip().startswith(b"<?xml") or b"<svg" in image_bytes[:256].lower():
-        return "image/svg+xml"
+        return None
     return None
 
 
@@ -134,10 +145,12 @@ class ImageAssetStore:
         base_dir: Path,
         route_prefix: str = "/api/uploads/imgs",
         system_config_store: SystemConfigStore | None = None,
+        user_store: UserStore | None = None,
     ):
         self.base_dir = base_dir
         self.route_prefix = route_prefix.rstrip("/")
         self.system_config_store = system_config_store
+        self.user_store = user_store
         self._request_bytes = 0
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -181,38 +194,49 @@ class ImageAssetStore:
                 return False
         return True
 
-    def store_data_url(self, value: str) -> str | None:
+    def _track_owner(self, filename: str, owner_id: str | None, mime_type: str) -> None:
+        if self.user_store is None or not owner_id:
+            return
+        self.user_store.set_uploaded_image_owner(filename, owner_id, mime_type)
+
+    def store_data_url(self, value: str, *, owner_id: str | None = None) -> str | None:
         decoded = _decode_base64_image(value)
         if decoded is None:
             return None
         image_bytes, mime_type = decoded
+        if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
+            return None
         filename = self._filename_for(image_bytes, mime_type)
         if not self._can_store(image_bytes):
             return self._placeholder_for_expired(filename)
         path = self.base_dir / filename
         if not path.exists():
             path.write_bytes(image_bytes)
+        self._track_owner(filename, owner_id, mime_type)
         self._request_bytes += len(image_bytes)
         return self.public_url(filename)
 
-    def normalize_request_data(self, value: Any) -> Any:
+    def normalize_request_data(self, value: Any, *, owner_id: str | None = None) -> Any:
         self._request_bytes = 0
-        return self._normalize_node(value)
+        return self._normalize_node(value, owner_id=owner_id)
 
-    def _rewrite_string(self, value: str, *, key: str = "") -> str:
-        data_url_url = self.store_data_url(value)
+    def _rewrite_string(self, value: str, *, key: str = "", owner_id: str | None = None) -> str:
+        data_url_url = self.store_data_url(value, owner_id=owner_id)
         if data_url_url is not None:
             return data_url_url
 
         decoded = _decode_base64_image(value)
         if decoded is not None:
             image_bytes, mime_type = decoded
+            if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
+                return value
             filename = self._filename_for(image_bytes, mime_type)
             if not self._can_store(image_bytes):
                 return self._placeholder_for_expired(filename)
             path = self.base_dir / filename
             if not path.exists():
                 path.write_bytes(image_bytes)
+            self._track_owner(filename, owner_id, mime_type)
             self._request_bytes += len(image_bytes)
             return self.public_url(filename)
 
@@ -220,44 +244,75 @@ class ImageAssetStore:
             decoded = _decode_base64_image(value)
             if decoded is not None:
                 image_bytes, mime_type = decoded
+                if mime_type not in ALLOWED_IMAGE_MIME_TYPES:
+                    return value
                 filename = self._filename_for(image_bytes, mime_type)
                 if not self._can_store(image_bytes):
                     return self._placeholder_for_expired(filename)
                 path = self.base_dir / filename
                 if not path.exists():
                     path.write_bytes(image_bytes)
+                self._track_owner(filename, owner_id, mime_type)
                 self._request_bytes += len(image_bytes)
                 return self.public_url(filename)
         return value
 
-    def _normalize_node(self, value: Any, *, key: str = "") -> Any:
+    def _normalize_node(self, value: Any, *, key: str = "", owner_id: str | None = None) -> Any:
         if isinstance(value, str):
             parsed = _try_parse_structured_content(value)
             if parsed is not None:
-                return self._normalize_node(parsed, key=key)
-            return self._rewrite_string(value, key=key)
+                return self._normalize_node(parsed, key=key, owner_id=owner_id)
+            return self._rewrite_string(value, key=key, owner_id=owner_id)
         if isinstance(value, list):
-            return [self._normalize_node(item, key=key) for item in value]
+            return [self._normalize_node(item, key=key, owner_id=owner_id) for item in value]
         if isinstance(value, dict):
             rewritten: dict[str, Any] = {}
             for item_key, item_value in value.items():
-                rewritten[item_key] = self._normalize_node(item_value, key=str(item_key))
+                rewritten[item_key] = self._normalize_node(item_value, key=str(item_key), owner_id=owner_id)
             return rewritten
         return value
 
-    def rewrite_value(self, value: Any, *, key: str = "") -> Any:
-        return self._normalize_node(value, key=key)
+    def rewrite_value(self, value: Any, *, key: str = "", owner_id: str | None = None) -> Any:
+        return self._normalize_node(value, key=key, owner_id=owner_id)
 
-    def normalize_content(self, content: Any) -> str:
+    def normalize_content(self, content: Any, *, owner_id: str | None = None) -> str:
         if isinstance(content, str):
             parsed = _try_parse_structured_content(content)
             if parsed is not None:
-                rewritten = self.rewrite_value(parsed, key="content")
+                rewritten = self.rewrite_value(parsed, key="content", owner_id=owner_id)
                 return json.dumps(rewritten, ensure_ascii=False, separators=(",", ":"))
-        rewritten = self.rewrite_value(content, key="content")
+        rewritten = self.rewrite_value(content, key="content", owner_id=owner_id)
         if isinstance(rewritten, str):
             return rewritten.replace("\r\n", "\n").replace("\\r\\n", "\n").replace("\\n", "\n")
         return json.dumps(rewritten, ensure_ascii=False, separators=(",", ":"))
+
+    def backfill_owners_from_messages(self, messages: list[Any], owner_lookup: dict[str, str]) -> None:
+        if self.user_store is None:
+            return
+        for message in messages:
+            owner_id = owner_lookup.get(str(getattr(message, "conversation_id", "")).strip(), "")
+            if not owner_id:
+                continue
+            for match in _UPLOAD_URL_RE.finditer(str(getattr(message, "content", "") or "")):
+                filename = match.group(1)
+                if filename:
+                    mime_type = ""
+                    suffix = Path(filename).suffix.lower()
+                    if suffix == ".png":
+                        mime_type = "image/png"
+                    elif suffix in {".jpg", ".jpeg"}:
+                        mime_type = "image/jpeg"
+                    elif suffix == ".gif":
+                        mime_type = "image/gif"
+                    elif suffix == ".webp":
+                        mime_type = "image/webp"
+                    elif suffix == ".avif":
+                        mime_type = "image/avif"
+                    elif suffix == ".bmp":
+                        mime_type = "image/bmp"
+                    elif suffix in {".tif", ".tiff"}:
+                        mime_type = "image/tiff"
+                    self.user_store.set_uploaded_image_owner(filename, owner_id, mime_type)
 
     def referenced_filenames(self, content: str) -> set[str]:
         if not content:
