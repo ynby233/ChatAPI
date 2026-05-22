@@ -26,6 +26,8 @@ npm i
 npm run build
 ```
 
+首页默认显示当前访问来源作为 API 基址；如需在构建时指定其他基址，可在构建前设置 `VITE_HOMEPAGE_API_BASE_URL`。
+
 #### 设置.env
 ```env
 CHATAPI_USERNAME=用户名
