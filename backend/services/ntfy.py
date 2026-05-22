@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from email.header import Header
 from logging import Logger
 from urllib import request
 
 from ..repositories import SystemConfigStore, UserStore
 
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ntfy")
+
+
+def _encode_header(value: str) -> str:
+    try:
+        value.encode("latin-1")
+        return value
+    except UnicodeEncodeError:
+        return Header(value, "utf-8").encode()
 
 
 def notify_new_message(
@@ -32,7 +41,7 @@ def notify_new_message(
             method="POST",
             headers={
                 "Content-Type": "text/plain; charset=utf-8",
-                "Title": conversation_title[:80] or title_fallback,
+                "Title": _encode_header(conversation_title[:80] or title_fallback),
             },
         )
         try:
