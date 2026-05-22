@@ -18,22 +18,19 @@ Recommended FNOS/container panel settings:
 The image serves both the Flask API and the built frontend from the same port.
 Use Lucky or another reverse proxy to expose the host port through HTTPS.
 
-## Required environment variables
+## Application configuration
 
-Set these in the container panel:
+The image automatically loads `/data/.env` when it exists. Put application settings in the NAS directory mounted to `/data`, for example:
 
 ```env
 CHATAPI_USERNAME=admin
 CHATAPI_PASSWORD=change-me
-```
-
-Recommended optional values:
-
-```env
 CHATAPI_SESSION_SECRET=replace-with-a-long-random-string
 CHATAPI_CORS_ORIGINS=https://your-domain.example
 CHATAPI_MODELS=human
 ```
+
+Container environment variables still take precedence when you need to override a value from the panel.
 
 `CHATAPI_MODELS` controls the model IDs returned by the OpenAI-compatible `/v1/models` endpoint. Use comma-separated values if you want multiple visible models, for example `human,gpt-human`.
 
@@ -44,6 +41,7 @@ CHATAPI_HOST=0.0.0.0
 CHATAPI_PORT=5000
 CHATAPI_DATA_DIR=/data
 CHATAPI_DB_PATH=/data/chatapi.sqlite3
+CHATAPI_ENV_FILE=/data/.env
 CHATAPI_WEB_DIST_DIR=/app/frontend/dist
 ```
 

@@ -16,6 +16,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CHATAPI_PORT=5000 \
     CHATAPI_DATA_DIR=/data \
     CHATAPI_DB_PATH=/data/chatapi.sqlite3 \
+    CHATAPI_ENV_FILE=/data/.env \
     CHATAPI_WEB_DIST_DIR=/app/frontend/dist
 
 WORKDIR /app
