@@ -10,9 +10,8 @@ on:
     paths:
       - Dockerfile
       - .dockerignore
+      - DOCKER_DEPLOY.md
       - .github/workflows/sync-and-publish.yml
-      - backend/**
-      - frontend/**
 
 permissions:
   contents: write
